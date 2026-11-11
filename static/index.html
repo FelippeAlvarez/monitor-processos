@@ -110,15 +110,24 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <div class="card"><span class="mut">Não constam no DataJud</span><b id="c-nao">0</b></div>
     <div class="card"><span class="mut">Última consulta</span><b id="c-ult" style="font-size:15px">—</b></div>
   </div>
+  <div class="card hide" id="vr-card"><b>Varredura diária</b> <span class="mut" id="vr-txt"></span>
+    <div style="background:var(--bd);border-radius:6px;height:8px;margin-top:8px"><div id="vr-barra" style="background:var(--ok);height:8px;border-radius:6px;width:0"></div></div>
+    <p class="warn hide" id="vr-aviso" style="font-size:13px;margin:8px 0 0"></p></div>
   <div class="acoes" style="margin-bottom:12px">
     <button class="b" id="b-consultar">Consultar agora</button>
     <button class="b sec" id="b-visto-todos">Marcar tudo como visto</button>
     <span class="mut" id="st-txt" style="align-self:center"></span>
   </div>
+  <div class="acoes" style="margin-bottom:12px">
+    <input id="f-busca" placeholder="Buscar por número, apelido, cliente ou pasta" style="flex:1;min-width:220px">
+    <select id="f-sit"><option value="ativos">Ativos</option><option value="novidades">Só com novidades</option><option value="erros">Com erro / não constam</option><option value="arquivados">Arquivados</option><option value="todos">Todos</option></select>
+    <button class="b sec sm" id="b-inativos">Arquivar parados…</button>
+  </div>
   <div class="card" style="padding:6px 10px; overflow-x:auto">
     <table><thead><tr><th>Processo</th><th>Última movimentação</th><th>Situação / DJEN</th><th></th></tr></thead>
     <tbody id="lista"></tbody></table>
-    <p class="mut hide" id="vazio" style="padding:10px">Nenhum processo cadastrado. Use a aba “Adicionar”.</p>
+    <p class="mut hide" id="vazio" style="padding:10px">Nenhum processo para mostrar. Use a aba “Adicionar” ou ajuste a busca/filtro.</p>
+    <div class="acoes hide" id="mais-box" style="padding:8px"><button class="b sec sm" id="b-mais">Mostrar mais</button><span class="mut" id="mais-txt" style="align-self:center"></span></div>
   </div>
   <div class="card hide" id="detalhe"></div>
 </section>
@@ -167,10 +176,20 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <p class="mut">A OAB é comparada como texto exato pelo DJEN: se o tribunal grava o número com sufixo (ex.: -A, -O), cadastre também essa variante.
     Apoio à conferência: <b>não conte prazo por este aviso</b>.</p>
   </div>
+  <div class="card hide" id="desc-card"></div>
   <div id="op-lista"></div>
 </section>
 
 <section id="t-adicionar" class="hide">
+  <div class="card">
+    <b>Importar de planilha (Excel .xlsx, .csv, .txt ou relatório em página web)</b>
+    <p class="mut">Procura números CNJ em qualquer célula. Se houver cabeçalho com colunas “Cliente”, “Pasta” ou “Apelido”, elas acompanham os processos.
+    Mostra uma prévia antes de cadastrar; processos já existentes são ignorados. Em lotes grandes, a primeira consulta de cada processo acontece aos poucos, pela varredura diária.
+    Arquivo .xls antigo: abra no Excel e salve como .xlsx.</p>
+    <input type="file" id="i-arq" accept=".xlsx,.csv,.txt,.xls,.html,.htm" style="padding:6px">
+    <div id="i-res" class="mut" style="margin-top:10px"></div>
+    <div class="acoes hide" id="i-acoes" style="margin-top:8px"><button class="b" id="b-i-ok">Cadastrar os novos</button></div>
+  </div>
   <div class="card">
     <label for="a-num">Número(s) CNJ — um ou vários (um por linha, ou colados de uma planilha)</label>
     <textarea id="a-num" rows="6" placeholder="0000000-00.0000.0.00.0000"></textarea>
@@ -232,8 +251,20 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <p class="mut">O CNJ pode trocar a chave a qualquer momento. A atual fica em datajud-wiki.cnj.jus.br/api-publica/acesso — se as consultas passarem a dar erro 401/403, atualize aqui.</p>
     <label><input type="checkbox" id="k-dje" style="width:auto"> Consultar também as publicações do DJEN (Comunica PJe, CNJ)</label>
     <p class="mut">Cada processo é consultado pelo número no servidor comunicaapi.pje.jus.br. Desmarque para usar somente o DataJud.</p>
-    <label for="k-int">Intervalo entre consultas automáticas (horas; 0 = desligado)</label>
+    <label for="k-int">Intervalo entre consultas automáticas dos filtros de pesquisa — e de todos os processos, se a varredura em blocos estiver desligada (horas; 0 = desligado)</label>
     <input id="k-int" type="number" min="0" max="168" step="1" style="max-width:160px">
+  </div>
+  <div class="card">
+    <label><input type="checkbox" id="v-ativa" style="width:auto"> Varredura diária em blocos (recomendado com muitos processos)</label>
+    <p class="mut">Cada processo ativo é consultado <b>uma vez por dia</b>, em blocos, dentro da janela de horário. Os mais antigos e os nunca consultados vão primeiro.
+    Processos arquivados não são consultados.</p>
+    <div class="grid2">
+      <div><label for="v-bloco">Processos por bloco (10 a 500)</label><input id="v-bloco" type="number" min="10" max="500"></div>
+      <div><label for="v-int">Minutos entre blocos (5 a 240)</label><input id="v-int" type="number" min="5" max="240"></div>
+      <div><label for="v-ini">Início da janela</label><input id="v-ini" type="time"></div>
+      <div><label for="v-fim">Fim da janela</label><input id="v-fim" type="time"></div>
+    </div>
+    <p class="mut" id="v-cap"></p>
   </div>
   <div class="card">
     <label><input type="checkbox" id="e-ativo" style="width:auto"> Enviar alerta por e-mail quando houver movimentação nova</label>
@@ -296,21 +327,40 @@ document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
 // painel
 const DJE = { ok: "consultado", pendente: "na fila", erro: "erro (nova tentativa automática)" };
 const SIT = { ok: ["ok", "Atualizado"], pendente: ["mut", "Na fila (1ª consulta pendente)"], nao_encontrado: ["warn", "Não encontrado"], erro: ["err", "Erro — nova tentativa automática"] };
+let LISTA = [], LIMITE = 150;
 async function carregarLista() {
-  const lista = await api("/api/processos");
-  $("#c-total").textContent = lista.length;
-  $("#c-novos").textContent = lista.filter(p => p.novos > 0).length;
-  const pn = lista.reduce((a, p) => a + (p.pub_novas || 0), 0);
+  LISTA = await api("/api/processos");
+  const ativos = LISTA.filter(p => p.ativo);
+  $("#c-total").textContent = ativos.length;
+  $("#c-novos").textContent = ativos.filter(p => p.novos > 0).length;
+  const pn = ativos.reduce((a, p) => a + (p.pub_novas || 0), 0);
   $("#c-pubs").textContent = pn;
   $("#nav-pub").textContent = pn; $("#nav-pub").classList.toggle("hide", pn === 0);
   carregarContadorOab();
-  $("#c-erros").textContent = lista.filter(p => p.status === "erro").length;
-  $("#c-nao").textContent = lista.filter(p => p.status === "nao_encontrado").length;
-  $("#vazio").classList.toggle("hide", lista.length > 0);
+  $("#c-erros").textContent = ativos.filter(p => p.status === "erro").length;
+  $("#c-nao").textContent = ativos.filter(p => p.status === "nao_encontrado").length;
+  renderLista();
+}
+function semAcento(t) { return String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
+function renderLista() {
+  const q = semAcento($("#f-busca").value).trim(), qn = q.replace(/\D/g, ""), sit = $("#f-sit").value;
+  let lista = LISTA.filter(p => {
+    if (sit === "ativos" && !p.ativo) return false;
+    if (sit === "arquivados" && p.ativo) return false;
+    if (sit === "novidades" && !(p.ativo && (p.novos > 0 || p.pub_novas > 0))) return false;
+    if (sit === "erros" && !(p.ativo && (p.status === "erro" || p.status === "nao_encontrado"))) return false;
+    if (!q) return true;
+    return semAcento(p.apelido + " " + p.cliente + " " + p.pasta + " " + p.numero).includes(q) || (qn.length >= 4 && p.numero_limpo.includes(qn));
+  });
+  const total = lista.length;
+  lista = lista.slice(0, LIMITE);
+  $("#vazio").classList.toggle("hide", total > 0);
+  $("#mais-box").classList.toggle("hide", total <= LIMITE);
+  $("#mais-txt").textContent = `mostrando ${lista.length} de ${total}`;
   $("#lista").innerHTML = lista.map(p => {
     const [cls, txt] = SIT[p.status] || ["mut", p.status];
     return `<tr>
-      <td>${p.apelido ? `<b>${esc(p.apelido)}</b> ` : ""}${p.novos ? `<span class="badge">${p.novos} mov. nova(s)</span> ` : ""}${p.pub_novas ? `<span class="badge">${p.pub_novas} publ. nova(s)</span>` : ""}${p.apelido || p.novos || p.pub_novas ? "<br>" : ""}
+      <td>${p.apelido ? `<b>${esc(p.apelido)}</b> ` : ""}${p.ativo ? "" : '<span class="tag">arquivado</span> '}${p.novos ? `<span class="badge">${p.novos} mov. nova(s)</span> ` : ""}${p.pub_novas ? `<span class="badge">${p.pub_novas} publ. nova(s)</span>` : ""}${p.apelido || !p.ativo || p.novos || p.pub_novas ? "<br>" : ""}
         <span class="num">${esc(p.numero)}</span>${p.cliente || p.pasta ? `<br><span class="mut">${esc(p.cliente)}${p.pasta ? " · pasta " + esc(p.pasta) : ""}</span>` : ""}</td>
       <td>${esc(p.ultimo_mov || "—")}<br><span class="mut">${fmt(p.ultimo_mov_data)}${p.classe ? " · " + esc(p.classe) : ""}</span>
         ${p.ultima_atualizacao ? `<br><span class="mut">registro do CNJ atualizado em ${fmt(p.ultima_atualizacao)}</span>` : ""}</td>
@@ -318,15 +368,31 @@ async function carregarLista() {
         <br><span class="mut">DJEN: ${DJE[p.dje_status] || "—"}${p.pub_total ? ` · ${p.pub_total} publ.${p.pub_ultima ? ", última em " + fmt(p.pub_ultima) : ""}` : ""}</span>${p.dje_status === "erro" && p.dje_mensagem ? `<br><span class="err" style="font-size:13px">${esc(p.dje_mensagem)}</span>` : ""}</td>
       <td><div class="acoes">
         <button class="b sm sec" data-ver="${p.id}">Movimentos</button>
-        <button class="b sm sec" data-upd="${p.id}">Atualizar</button>
+        ${p.ativo ? `<button class="b sm sec" data-upd="${p.id}">Atualizar</button><button class="b sm sec" data-arq="${p.id}" data-a="0">Arquivar</button>`
+                  : `<button class="b sm sec" data-arq="${p.id}" data-a="1">Reativar</button>`}
         <button class="b sm dg" data-del="${p.id}">Remover</button></div></td></tr>`;
   }).join("");
 }
+let _tb; $("#f-busca").oninput = () => { clearTimeout(_tb); _tb = setTimeout(() => { LIMITE = 150; renderLista(); }, 200); };
+$("#f-sit").onchange = () => { LIMITE = 150; renderLista(); };
+$("#b-mais").onclick = () => { LIMITE += 300; renderLista(); };
+$("#b-inativos").onclick = async () => {
+  try {
+    const m = prompt("Arquivar os processos sem NENHUMA movimentação nem publicação há mais de quantos meses?", "12");
+    if (!m) return;
+    const r = await api("/api/processos/inativos", "POST", { meses: Number(m), simular: true });
+    if (!r.total) { aviso("Nenhum processo parado há mais de " + m + " meses."); return; }
+    if (!confirm(`${r.total} processo(s) estão sem andamento desde antes de ${fmt(r.corte)} (ex.: ${r.amostra.slice(0, 3).join(", ")}).\n\nArquivar? Eles deixam de ser consultados, mas não são apagados e podem ser reativados. Se voltarem a aparecer numa publicação dos filtros, você é avisado.`)) return;
+    const f = await api("/api/processos/inativos", "POST", { meses: Number(m), simular: false });
+    aviso(f.arquivados + " processo(s) arquivado(s)."); carregarLista();
+  } catch (e) { aviso(e.message); }
+};
 $("#lista").onclick = async (e) => {
   const b = e.target.closest("button"); if (!b) return;
   try {
     if (b.dataset.ver) await verMovimentos(b.dataset.ver);
     if (b.dataset.upd) { await api(`/api/processos/${b.dataset.upd}/consultar`, "POST", {}); aviso("Processo colocado na fila de consulta."); status(); }
+    if (b.dataset.arq) { await api("/api/processos/ativo", "POST", { ids: [Number(b.dataset.arq)], ativo: b.dataset.a === "1" }); carregarLista(); }
     if (b.dataset.del && confirm("Remover este processo e o histórico guardado?")) { await api(`/api/processos/${b.dataset.del}`, "DELETE"); carregarLista(); }
   } catch (err) { aviso(err.message); }
 };
@@ -345,7 +411,7 @@ $("#detalhe").onclick = async (e) => {
   if (b.id === "fechar") $("#detalhe").classList.add("hide");
   if (b.dataset.visto) { await api(`/api/processos/${b.dataset.visto}/visto`, "POST", {}); await carregarLista(); verMovimentos(b.dataset.visto); }
 };
-$("#b-consultar").onclick = async () => { try { const r = await api("/api/consultar", "POST", {}); aviso(`${r.enfileirados} processo(s) na fila de consulta.`); status(); } catch (e) { aviso(e.message); } };
+$("#b-consultar").onclick = async () => { try { if (LISTA.filter(p => p.ativo).length > 200 && !confirm("Consultar TODOS os processos agora? Com muitos processos, isso pode demorar bastante e esbarrar nos limites das APIs. A varredura diária já faz isso em blocos, sem você precisar clicar.")) return; const r = await api("/api/consultar", "POST", {}); aviso(`${r.enfileirados} processo(s) na fila de consulta.`); status(); } catch (e) { aviso(e.message); } };
 $("#b-visto-todos").onclick = async () => { await api("/api/visto-todos", "POST", {}); carregarLista(); };
 
 let rodandoAntes = false;
@@ -357,9 +423,20 @@ async function status() {
     if (s.rodando) partes.push(`Consultando… ${s.progresso || "iniciando"}${s.fila ? ` (+${s.fila} na fila)` : ""}`);
     if (s.dje_pausado_ate) partes.push("Limite do DJEN atingido: pausa até " + new Date(s.dje_pausado_ate * 1000).toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"}));
     if (s.pausado_ate) partes.push("Limite de requisições do CNJ atingido: pausa até " + new Date(s.pausado_ate * 1000).toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"}) + " (o restante segue na fila)");
-    if (!s.rodando && s.pendentes) partes.push(`${s.pendentes} processo(s) pendente(s) ou com erro — nova tentativa automática`);
-    if (!s.rodando && s.proximo_ciclo) partes.push("próxima consulta geral: " + new Date(s.proximo_ciclo * 1000).toLocaleString("pt-BR"));
-    else if (!s.rodando && !s.intervalo_horas) partes.push("consulta automática desligada");
+    if (!s.rodando && s.pendentes) partes.push(s.varredura && s.varredura.ativa ? `${s.pendentes} processo(s) aguardando a varredura diária (ou com erro, em nova tentativa automática)` : `${s.pendentes} processo(s) pendente(s) ou com erro — nova tentativa automática`);
+    const v = s.varredura;
+    if (v && v.ativa) {
+      $("#vr-card").classList.remove("hide");
+      const pct = v.ativos ? Math.round(100 * v.feitos_hoje / v.ativos) : 100;
+      $("#vr-barra").style.width = pct + "%";
+      $("#vr-txt").textContent = `${v.feitos_hoje} de ${v.ativos} processos consultados hoje · blocos de ${v.bloco} a cada ${v.intervalo_min} min, entre ${v.inicio} e ${v.fim}` +
+        (v.restantes === 0 ? " · concluída por hoje" : (v.na_janela ? "" : " · fora do horário (retoma às " + v.inicio + ")"));
+      const av = $("#vr-aviso");
+      av.textContent = v.capacidade_dia < v.ativos ? `Atenção: a capacidade diária configurada (${v.capacidade_dia}) é menor que o número de processos ativos (${v.ativos}). Aumente o bloco, diminua o intervalo ou amplie a janela em Configurações.` : "";
+      av.classList.toggle("hide", !av.textContent);
+    } else $("#vr-card").classList.add("hide");
+    if (!(v && v.ativa) && !s.rodando && s.proximo_ciclo) partes.push("próxima consulta geral: " + new Date(s.proximo_ciclo * 1000).toLocaleString("pt-BR"));
+    else if (!(v && v.ativa) && !s.rodando && !s.intervalo_horas) partes.push("consulta automática desligada");
     if (s.resumo && !s.rodando) partes.push(`último ciclo: ${s.resumo.consultados} consultado(s), ${s.resumo.novos} novidade(s), ${s.resumo.erros} erro(s), ${s.resumo.publicacoes_novas || 0} publicação(ões) nova(s), e-mail: ${s.resumo.email}`);
     if (s.oab_resumo && !s.rodando) partes.push(`OAB: ${s.oab_resumo.consultadas} consultada(s), ${s.oab_resumo.novas} publicação(ões) nova(s)${s.oab_resumo.aviso ? " — " + s.oab_resumo.aviso : ""}`);
     if (s.resumo && s.resumo.dje_aviso && !s.rodando) partes.push("DJEN: " + s.resumo.dje_aviso);
@@ -418,7 +495,7 @@ async function carregarOab() {
     return `<tr><td><b>${esc(descFiltro(o.tipo, o.numero, o.uf))}</b>${o.rotulo ? `<br><span class="mut">${esc(o.rotulo)}</span>` : ""}</td>
       <td><span class="${c}">${t}</span>${o.mensagem ? `<br><span class="${o.status === "erro" ? "err" : "warn"}" style="font-size:13px">${esc(o.mensagem)}</span>` : ""}<br><span class="mut">consultada: ${fmtUtc(o.ultima_consulta)}</span></td>
       <td>${o.pub_novas ? `<span class="badge">${o.pub_novas} nova(s)</span> ` : ""}<span class="mut">${o.pub_total} guardada(s)</span></td>
-      <td><div class="acoes"><button class="b sm sec" data-oc="${o.id}">Consultar</button><button class="b sm dg so-adm" data-od="${o.id}">Remover</button></div></td></tr>`;
+      <td><div class="acoes"><button class="b sm sec" data-oc="${o.id}">Consultar</button>${o.tipo === "oab" || !o.tipo ? `<button class="b sm sec" data-odc="${o.id}">Descobrir processos</button>` : ""}<button class="b sm sec" data-ove="${o.id}">Ver descobertos</button><button class="b sm dg so-adm" data-od="${o.id}">Remover</button></div></td></tr>`;
   }).join("");
   const so = $("#op-novas").checked;
   const pubs = await api("/api/oab-publicacoes" + (so ? "?novas=1" : ""));
@@ -446,6 +523,11 @@ $("#b-oab-add").onclick = async () => {
 $("#t-oab").onclick = async (e) => {
   const b = e.target.closest("button"); if (!b) return;
   try {
+    if (b.dataset.odc) {
+      const m = prompt("Descobrir os processos com publicação no DJEN neste filtro nos últimos quantos meses? (1 a 36)", "12");
+      if (m) { await api(`/api/oabs/${b.dataset.odc}/descobrir`, "POST", { meses: Number(m) }); aviso("Busca iniciada. Pode levar alguns minutos; acompanhe em “Ver descobertos”."); status(); }
+    }
+    if (b.dataset.ove) verDescobertos(b.dataset.ove);
     if (b.dataset.oc) { await api(`/api/oabs/${b.dataset.oc}/consultar`, "POST", {}); aviso("OAB colocada na fila de consulta."); }
     if (b.dataset.od && confirm("Remover este filtro e as publicações guardadas dele?")) { await api(`/api/oabs/${b.dataset.od}`, "DELETE"); carregarOab(); carregarContadorOab(); }
     if (b.dataset.cad) { const r = await api("/api/processos", "POST", { numeros: cnjMask(b.dataset.cad) });
@@ -464,18 +546,97 @@ $("#b-add").onclick = async () => {
   } catch (e) { $("#a-res").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
 };
 
+// descoberta de processos pelo filtro
+let DESC = { id: null, itens: [] };
+async function verDescobertos(id) {
+  DESC.id = id;
+  const r = await api(`/api/oabs/${id}/descobertos`);
+  DESC.itens = r.itens;
+  const c = $("#desc-card"); c.classList.remove("hide");
+  const i = r.info;
+  const novos = r.itens.filter(x => x.situacao === "novo");
+  c.innerHTML = `<div class="acoes" style="justify-content:space-between"><b>Processos descobertos por este filtro</b><button class="b sm sec" id="desc-x">Fechar</button></div>
+    <p class="mut">${i ? `Situação: <b>${esc(i.status)}</b> · busca em ${fmtUtc(i.quando)} · publicações desde ${fmt(i.desde)}` : "Nenhuma busca feita ainda. Use “Descobrir processos”."}
+    ${i && i.mensagem ? `<br><span class="${i.status === "erro" ? "err" : "warn"}">${esc(i.mensagem)}</span>` : ""}</p>
+    ${r.itens.length ? `<div class="acoes"><button class="b sm" id="desc-add">Cadastrar os ${novos.length} novos</button>
+      <label style="margin:0"><input type="checkbox" id="desc-sel" style="width:auto"> só os que eu marcar</label>
+      <span class="mut">Aparecem processos com pelo menos uma publicação no período; processos já arquivados ou cadastrados são sinalizados.</span></div>
+    <div style="overflow-x:auto;max-height:480px;overflow-y:auto"><table><thead><tr><th></th><th>Processo</th><th>Última publicação</th><th>Publ.</th><th>Situação</th></tr></thead><tbody>
+    ${r.itens.map(x => `<tr><td><input type="checkbox" data-dn="${esc(x.numero)}" style="width:auto" ${x.situacao === "novo" ? "" : "disabled"}></td>
+      <td class="num">${esc(x.numero)}<br><span class="mut" style="font-family:inherit">${esc(x.tribunal)} · ${esc(x.classe)}</span></td>
+      <td>${fmt(x.ultima_data)}<br><span class="mut">${esc(x.orgao)}</span></td><td>${x.n_pubs}</td>
+      <td>${x.situacao === "novo" ? '<span class="warn">novo</span>' : x.situacao === "arquivado" ? '<span class="tag">arquivado</span>' : '<span class="ok">já cadastrado</span>'}</td></tr>`).join("")}
+    </tbody></table></div>` : ""}`;
+}
+$("#desc-card").onclick = async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.id === "desc-x") $("#desc-card").classList.add("hide");
+  if (b.id === "desc-add") {
+    try {
+      const marcados = [...document.querySelectorAll("[data-dn]:checked")].map(x => x.dataset.dn);
+      const so = $("#desc-sel").checked;
+      const nums = so ? marcados : DESC.itens.filter(x => x.situacao === "novo").map(x => x.numero);
+      if (!nums.length) { aviso("Nenhum processo novo para cadastrar."); return; }
+      if (!confirm(`Cadastrar ${nums.length} processo(s)? Eles entram na varredura diária (a primeira consulta de cada um vira a base de comparação).`)) return;
+      const r = await api("/api/processos", "POST", { numeros: nums.join("\n") });
+      aviso(`${r.adicionados.length} cadastrado(s)` + (r.repetidos.length ? `, ${r.repetidos.length} já existiam` : "") + (r.invalidos.length ? `, ${r.invalidos.length} inválido(s)` : "") + ".");
+      verDescobertos(DESC.id); carregarLista();
+    } catch (er) { aviso(er.message); }
+  }
+};
+
+// importação
+let IMP = null;
+function lerArquivo(f) {
+  return new Promise((ok, erro) => { const r = new FileReader(); r.onerror = () => erro(new Error("Não consegui ler o arquivo."));
+    r.onload = () => { const u = new Uint8Array(r.result); let bin = ""; for (let i = 0; i < u.length; i += 32768) bin += String.fromCharCode.apply(null, u.subarray(i, i + 32768)); ok(btoa(bin)); };
+    r.readAsArrayBuffer(f); });
+}
+$("#i-arq").onchange = async () => {
+  const f = $("#i-arq").files[0]; IMP = null; $("#i-acoes").classList.add("hide"); if (!f) return;
+  $("#i-res").textContent = "Lendo…";
+  try {
+    if (f.size > 9e6) throw new Error("Arquivo grande demais (máx. 9 MB).");
+    IMP = { nome: f.name, b64: await lerArquivo(f) };
+    const r = await api("/api/importar", "POST", { nome: IMP.nome, conteudo_b64: IMP.b64, simular: true });
+    $("#i-res").innerHTML = `<b>${r.encontrados}</b> processo(s) válido(s) no arquivo: <b>${r.novos}</b> novo(s), ${r.repetidos} já cadastrado(s).` +
+      (r.colunas.length ? ` Colunas reconhecidas: ${r.colunas.join(", ")}.` : " Nenhuma coluna Cliente/Pasta/Apelido reconhecida.") +
+      (r.invalidos_total ? `<br><span class="warn">${r.invalidos_total} número(s) rejeitado(s) (dígito verificador ou tribunal não suportado), ex.: ${r.invalidos.slice(0, 3).map(x => esc(x.numero)).join(", ")}</span>` : "") +
+      (r.amostra.length ? `<br>Exemplos: ${r.amostra.map(esc).join(", ")}` : "");
+    $("#i-acoes").classList.toggle("hide", r.novos === 0);
+    $("#b-i-ok").textContent = `Cadastrar os ${r.novos} novos`;
+  } catch (e) { $("#i-res").textContent = ""; aviso(e.message); }
+};
+$("#b-i-ok").onclick = async () => {
+  if (!IMP) return;
+  try {
+    const r = await api("/api/importar", "POST", { nome: IMP.nome, conteudo_b64: IMP.b64, simular: false });
+    $("#i-res").innerHTML = `<span class="ok">${r.adicionados} processo(s) cadastrado(s).</span> ${r.em_varredura ? "A primeira consulta de cada um será feita pela varredura diária, em blocos." : ""}`;
+    $("#i-acoes").classList.add("hide"); $("#i-arq").value = ""; IMP = null; carregarLista();
+  } catch (e) { aviso(e.message); }
+};
+
 // configurações
 async function carregarConfig() {
   const c = await api("/api/config");
   $("#k-key").value = c.api_key; $("#k-dje").checked = c.dje_ativo !== false; $("#k-int").value = c.intervalo_horas;
+  const v = c.varredura; $("#v-ativa").checked = v.ativa; $("#v-bloco").value = v.bloco; $("#v-int").value = v.intervalo_min; $("#v-ini").value = v.inicio; $("#v-fim").value = v.fim;
+  capacidade();
   const e = c.email;
   $("#e-ativo").checked = e.ativo; $("#e-host").value = e.smtp_host; $("#e-porta").value = e.smtp_porta;
   $("#e-user").value = e.usuario; $("#e-rem").value = e.remetente; $("#e-dest").value = e.destinatario;
   $("#e-senha").value = ""; $("#e-senha").placeholder = e.senha_definida ? "(senha já definida — deixe vazio para manter)" : "senha de aplicativo";
 }
+function capacidade() {
+  const hm = (t) => { const [h, m] = (t || "0:0").split(":").map(Number); return h * 60 + m; };
+  const n = Math.floor((hm($("#v-fim").value) - hm($("#v-ini").value)) / (Number($("#v-int").value) || 30));
+  $("#v-cap").textContent = n > 0 ? `Capacidade: até ${n * Number($("#v-bloco").value || 0)} processos por dia (${n} blocos).` : "Janela inválida.";
+}
+["#v-bloco", "#v-int", "#v-ini", "#v-fim"].forEach(i => $(i).oninput = capacidade);
 $("#b-cfg").onclick = async () => {
   try {
     await api("/api/config", "POST", { api_key: $("#k-key").value, dje_ativo: $("#k-dje").checked, intervalo_horas: $("#k-int").value,
+      varredura: { ativa: $("#v-ativa").checked, bloco: $("#v-bloco").value, intervalo_min: $("#v-int").value, inicio: $("#v-ini").value, fim: $("#v-fim").value },
       email: { ativo: $("#e-ativo").checked, smtp_host: $("#e-host").value, smtp_porta: $("#e-porta").value, usuario: $("#e-user").value,
                senha: $("#e-senha").value, remetente: $("#e-rem").value, destinatario: $("#e-dest").value } });
     aviso("Configurações salvas."); carregarConfig();

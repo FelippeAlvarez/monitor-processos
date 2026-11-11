@@ -27,6 +27,10 @@ POLÍTICA DE PRIVACIDADE — MONITOR DE PROCESSOS
 5. Terceiros. Os rótulos "cliente" e "pasta" podem identificar pessoas; o usuário é responsável pelo
    tratamento desses dados conforme a LGPD e o sigilo profissional.
 
+5-B. Importação e descoberta (v0.5). A importação de planilhas lê o arquivo enviado pelo usuário e grava números de processo e, se houver,
+   cliente, pasta e apelido; o arquivo em si não é guardado. A "descoberta" guarda, por filtro, apenas número do processo, tribunal, classe,
+   órgão e datas/contagem de publicações (sem o texto). Processos arquivados continuam no banco até serem removidos.
+
 5-A. Filtros de pesquisa (OAB, CPF/CNPJ, texto). Ao cadastrar filtros, o programa guarda localmente publicações do DJEN em que ela figura como
    advogado destinatário, inclusive de processos de terceiros (partes, advogados e texto), e pode enviá-las em trechos por
    e-mail. O usuário responde por essa finalidade (LGPD) e por proteger a máquina e a caixa de e-mail.

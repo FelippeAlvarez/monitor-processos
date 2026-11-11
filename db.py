@@ -103,6 +103,37 @@ CREATE TABLE IF NOT EXISTS oab_pubs(
 );
 """
 
+SCHEMA_DESC = """
+CREATE TABLE IF NOT EXISTS descoberta_exec(
+  oab_id INTEGER PRIMARY KEY REFERENCES oabs(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT '',
+  quando TEXT,
+  mensagem TEXT DEFAULT '',
+  desde TEXT DEFAULT '',
+  truncado INTEGER NOT NULL DEFAULT 0,
+  ignorados INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS descobertos(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  oab_id INTEGER NOT NULL REFERENCES oabs(id) ON DELETE CASCADE,
+  numero TEXT NOT NULL,
+  numero_limpo TEXT NOT NULL,
+  tribunal TEXT DEFAULT '',
+  classe TEXT DEFAULT '',
+  orgao TEXT DEFAULT '',
+  n_pubs INTEGER NOT NULL DEFAULT 0,
+  ultima_data TEXT DEFAULT '',
+  UNIQUE(oab_id, numero_limpo)
+);
+"""
+
+
+def inicio_do_dia_utc(agora_local=None):
+    """Início do dia local (00:00), no mesmo formato UTC usado em 'ultima_consulta' (comparável como texto)."""
+    a = agora_local or dt.datetime.now()
+    ini = a.replace(hour=0, minute=0, second=0, microsecond=0)
+    return dt.datetime.fromtimestamp(ini.timestamp(), dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
 
 def agora():
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -124,6 +155,7 @@ class Banco:
         self.conn.executescript(SCHEMA)
         self.conn.executescript(SCHEMA_PUB)
         self.conn.executescript(SCHEMA_OAB)
+        self.conn.executescript(SCHEMA_DESC)
         self._migrar()
         self.conn.commit()
 
@@ -355,7 +387,7 @@ class Banco:
         processo) e comunicações repetidas (mesmo processo, data e texto, para destinatários diferentes)."""
         novas = []
         with self.lock:
-            cadastrados = {r["numero_limpo"] for r in self.conn.execute("SELECT numero_limpo FROM processos")}
+            cadastrados = {r["numero_limpo"] for r in self.conn.execute("SELECT numero_limpo FROM processos WHERE ativo=1")}
             vistos_lote = set()
             for it in itens:
                 if it["numero"] in cadastrados:
@@ -403,3 +435,78 @@ class Banco:
             else:
                 self.conn.execute("UPDATE oab_pubs SET visto=1 WHERE oab_id=? AND visto=0", (oid,))
             self.conn.commit()
+
+
+    # ------------------------------------------------------------ v0.5: arquivar, contagens, varredura, descoberta
+    def definir_ativo(self, ids, ativo):
+        ids = [int(i) for i in ids]
+        if not ids:
+            return 0
+        with self.lock:
+            n = 0
+            for i in range(0, len(ids), 500):
+                lote = ids[i:i + 500]
+                cur = self.conn.execute(
+                    f"UPDATE processos SET ativo=? WHERE id IN ({','.join('?' * len(lote))}) AND ativo<>?",
+                    [1 if ativo else 0, *lote, 1 if ativo else 0])
+                n += cur.rowcount
+            self.conn.commit()
+        return n
+
+    def total_pub_novas(self):
+        return self._linhas("SELECT COUNT(*) AS n FROM publicacoes WHERE visto=0 AND cancelada=0")[0]["n"]
+
+    def total_mov_novos(self):
+        return self._linhas("SELECT COUNT(DISTINCT processo_id) AS n FROM movimentos WHERE visto=0")[0]["n"]
+
+    def sem_andamento(self, desde_iso):
+        """Processos ativos já consultados com sucesso cuja última movimentação E última publicação são anteriores a `desde_iso`
+        (AAAA-MM-DD). Quem não tem nenhuma data conhecida fica de fora (não há como afirmar que está parado)."""
+        return self._linhas("""
+            SELECT id, numero, apelido, cliente, ult FROM (
+              SELECT p.id, p.numero, p.apelido, p.cliente,
+                MAX(COALESCE((SELECT MAX(substr(m.data_hora,1,10)) FROM movimentos m WHERE m.processo_id=p.id), ''),
+                    COALESCE((SELECT MAX(substr(b.data_disp,1,10)) FROM publicacoes b WHERE b.processo_id=p.id), '')) AS ult
+              FROM processos p WHERE p.ativo=1 AND p.baseline_feito=1)
+            WHERE ult<>'' AND ult<? ORDER BY ult""", (desde_iso,))
+
+    def candidatos_varredura(self, inicio_dia_utc):
+        """Processos ativos ainda não consultados hoje: nunca consultados primeiro, depois os de consulta mais antiga."""
+        return self._linhas(
+            "SELECT id, ultima_consulta, status FROM processos WHERE ativo=1 AND COALESCE(ultima_consulta,'')<? "
+            "ORDER BY COALESCE(ultima_consulta,'') , id", (inicio_dia_utc,))
+
+    def consultados_desde(self, inicio_dia_utc):
+        return self._linhas("SELECT COUNT(*) AS n FROM processos WHERE ativo=1 AND COALESCE(ultima_consulta,'')>=?",
+                            (inicio_dia_utc,))[0]["n"]
+
+    def registrar_descoberta_status(self, oid, status, mensagem="", desde="", truncado=False, ignorados=0):
+        with self.lock:
+            self.conn.execute(
+                "INSERT INTO descoberta_exec(oab_id,status,quando,mensagem,desde,truncado,ignorados) VALUES(?,?,?,?,?,?,?) "
+                "ON CONFLICT(oab_id) DO UPDATE SET status=excluded.status, quando=excluded.quando, mensagem=excluded.mensagem, "
+                "desde=excluded.desde, truncado=excluded.truncado, ignorados=excluded.ignorados",
+                (oid, status, agora(), mensagem, desde, 1 if truncado else 0, ignorados))
+            self.conn.commit()
+
+    def registrar_descobertos(self, oid, itens):
+        """Substitui a lista de processos descobertos por este filtro. itens: dicts com numero, numero_limpo, ..."""
+        with self.lock:
+            self.conn.execute("DELETE FROM descobertos WHERE oab_id=?", (oid,))
+            self.conn.executemany(
+                "INSERT INTO descobertos(oab_id,numero,numero_limpo,tribunal,classe,orgao,n_pubs,ultima_data) VALUES(?,?,?,?,?,?,?,?)",
+                [(oid, i["numero"], i["numero_limpo"], i["tribunal"], i["classe"], i["orgao"], i["n_pubs"], i["ultima_data"])
+                 for i in itens])
+            self.conn.commit()
+
+    def descobertos(self, oid):
+        info = self._linhas("SELECT * FROM descoberta_exec WHERE oab_id=?", (oid,))
+        itens = self._linhas("""
+            SELECT d.*, CASE WHEN p.id IS NULL THEN 'novo' WHEN p.ativo=1 THEN 'cadastrado' ELSE 'arquivado' END AS situacao
+            FROM descobertos d LEFT JOIN processos p ON p.numero_limpo=d.numero_limpo
+            WHERE d.oab_id=? ORDER BY d.ultima_data DESC, d.numero""", (oid,))
+        return {"info": info[0] if info else None, "itens": itens}
+
+    def listar_basico(self):
+        """Só id/numero/numero_limpo/ativo (rápido; sem as contagens da listagem completa)."""
+        return self._linhas("SELECT id, numero, numero_limpo, ativo FROM processos")

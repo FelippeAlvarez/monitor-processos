@@ -239,6 +239,7 @@ class Base(unittest.TestCase):
         self.cfg = Config(base / "config.json")
         self.cfg.dados["base_url"] = self.url
         self.cfg.dados["dje_base_url"] = self.url_dje
+        self.cfg.dados["varredura"]["ativa"] = False  # testes antigos usam o modo clássico (ciclo completo); a varredura em blocos tem testes próprios
         self.banco = Banco(base / "p.db")
         self.mon = Monitor(self.banco, self.cfg, pausa_entre_consultas=0, espera_429=(1, 2, 3), pausa_limite=900)
         self.esperas = []

@@ -8,6 +8,9 @@ import json
 import logging
 import logging.handlers
 import os
+import base64
+import binascii
+import datetime as dt
 import re
 import secrets
 import socket
@@ -24,6 +27,7 @@ import auth
 import backup
 import datajud
 import dje
+import importacao
 import mailer
 from config import Config
 from db import Banco
@@ -100,7 +104,7 @@ def r_status(h):
     pausado = m.pausado_ate if m.pausado_ate > time.time() else None
     h.json({"rodando": m.rodando, "progresso": m.progresso, "resumo": m.resumo, "fila": len(m.fila),
             "pendentes": sum(1 for p in ativos if p["status"] in ("pendente", "erro")),
-            "pub_novas": sum(p["pub_novas"] for p in CTX.banco.listar()),
+            "pub_novas": CTX.banco.total_pub_novas(), "varredura": m.resumo_varredura(),
             "oab_novas": sum(o["pub_novas"] for o in CTX.banco.oabs()),
             "oab_resumo": m.resumo_oab,
             "pausado_ate": pausado,
@@ -230,8 +234,9 @@ def r_adicionar(h):
         else:
             res["adicionados"].append(info["numero"])
             novos_ids.append(pid)
-    if novos_ids:
-        _disparar(set(novos_ids))
+    if novos_ids and not (len(novos_ids) > 20 and CTX.monitor.varredura_ativa()):
+        _disparar(set(novos_ids))  # lotes grandes esperam a varredura em blocos (evita estourar o limite da API)
+    res["em_varredura"] = bool(novos_ids) and len(novos_ids) > 20 and CTX.monitor.varredura_ativa()
     if res["adicionados"]:
         h.auditar("processo_adicionado", f"{len(res['adicionados'])} processo(s): " + ", ".join(res["adicionados"][:5])
                   + ("…" if len(res["adicionados"]) > 5 else ""))
@@ -426,6 +431,78 @@ def r_backup_agora(h):
     h.json({"ok": True, "arquivo": arq.name})
 
 
+# ---------------------------------------------------------------- v0.5: arquivar, importar, descobrir
+def r_proc_ativo(h):
+    c = h.corpo()
+    ids = c.get("ids")
+    if not isinstance(ids, list) or not ids or len(ids) > 5000:
+        return h.json({"erro": "Informe a lista de processos (até 5000)."}, 400)
+    ativo = bool(c.get("ativo"))
+    n = CTX.banco.definir_ativo([int(i) for i in ids], ativo)
+    h.auditar("processos_reativados" if ativo else "processos_arquivados", f"{n} processo(s)")
+    h.json({"ok": True, "alterados": n})
+
+
+def r_proc_inativos(h):
+    """Arquiva (ou só simula) os processos sem movimentação nem publicação há mais de N meses."""
+    c = h.corpo()
+    meses = int(c.get("meses", 12))
+    if not 1 <= meses <= 120:
+        return h.json({"erro": "Informe de 1 a 120 meses."}, 400)
+    corte = (dt.date.today() - dt.timedelta(days=round(meses * 30.4375))).isoformat()
+    lista = CTX.banco.sem_andamento(corte)
+    if c.get("simular", True):
+        return h.json({"total": len(lista), "corte": corte, "amostra": [x["numero"] for x in lista[:8]]})
+    n = CTX.banco.definir_ativo([x["id"] for x in lista], False)
+    h.auditar("processos_arquivados", f"{n} processo(s) sem andamento desde antes de {corte} ({meses} meses)")
+    h.json({"ok": True, "arquivados": n})
+
+
+def r_importar(h):
+    c = h.corpo(limite=14_000_000)
+    try:
+        dados = base64.b64decode(str(c.get("conteudo_b64") or ""), validate=False)
+    except (binascii.Error, ValueError):
+        return h.json({"erro": "Arquivo ilegível."}, 400)
+    try:
+        r = importacao.analisar(dados)
+    except importacao.ErroImportacao as e:
+        return h.json({"erro": str(e)}, 400)
+    existentes = {p["numero_limpo"] for p in CTX.banco.listar_basico()}
+    novos = [v for v in r["validos"] if v["limpo"] not in existentes]
+    res = {"encontrados": len(r["validos"]), "novos": len(novos), "repetidos": len(r["validos"]) - len(novos),
+           "invalidos": r["invalidos"][:50], "invalidos_total": len(r["invalidos"]), "colunas": r["colunas"],
+           "amostra": [v["numero"] for v in novos[:5]]}
+    if c.get("simular", True):
+        res["simulado"] = True
+        return h.json(res)
+    for v in novos:
+        CTX.banco.adicionar(v["numero"], v["limpo"], v["alias"], v["apelido"], v["cliente"], v["pasta"])
+    res["adicionados"] = len(novos)
+    res["em_varredura"] = bool(novos) and CTX.monitor.varredura_ativa()
+    if novos and not CTX.monitor.varredura_ativa():
+        _disparar({p["id"] for p in CTX.banco.ativos() if p["numero_limpo"] in {v["limpo"] for v in novos}})
+    h.auditar("processos_importados", f"{len(novos)} novo(s) de {str(c.get('nome') or '')[:60]}")
+    h.json(res)
+
+
+def r_oab_descobrir(h, oid):
+    c = h.corpo()
+    meses = int(c.get("meses", 12))
+    if not 1 <= meses <= 36:
+        return h.json({"erro": "Informe de 1 a 36 meses."}, 400)
+    o = CTX.banco.obter_oab(int(oid))
+    if not o:
+        return h.json({"erro": "Filtro não encontrado."}, 404)
+    CTX.monitor.solicitar_descoberta(int(oid), round(meses * 30.4375))
+    h.auditar("descoberta_iniciada", f"{dje.descrever_filtro(o.get('tipo', 'oab'), o['numero'], o['uf'])} — {meses} meses")
+    h.json({"ok": True})
+
+
+def r_oab_descobertos(h, oid):
+    h.json(CTX.banco.descobertos(int(oid)))
+
+
 # nível: "pub" = sem login; "usu" = qualquer usuário logado; "adm" = só administrador
 ROTAS = [
     ("GET", r"/", r_index, "pub"),
@@ -443,6 +520,11 @@ ROTAS = [
     ("POST", r"/api/oabs", r_oab_add, "adm"),
     ("DELETE", r"/api/oabs/(\d+)", r_oab_del, "adm"),
     ("POST", r"/api/oabs/(\d+)/consultar", r_oab_consultar, "usu"),
+    ("POST", r"/api/oabs/(\d+)/descobrir", r_oab_descobrir, "usu"),
+    ("GET", r"/api/oabs/(\d+)/descobertos", r_oab_descobertos, "usu"),
+    ("POST", r"/api/processos/ativo", r_proc_ativo, "usu"),
+    ("POST", r"/api/processos/inativos", r_proc_inativos, "usu"),
+    ("POST", r"/api/importar", r_importar, "usu"),
     ("GET", r"/api/oab-publicacoes", r_oab_pubs, "usu"),
     ("POST", r"/api/oab-publicacoes/visto", r_oab_visto, "usu"),
     ("GET", r"/api/processos", r_listar, "usu"),
@@ -523,9 +605,9 @@ class Handler(BaseHTTPRequestHandler):
     def json(self, obj, status=200):
         self.enviar(json.dumps(obj, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8", status)
 
-    def corpo(self):
+    def corpo(self, limite=1_000_000):
         n = int(self.headers.get("Content-Length") or 0)
-        if n > 1_000_000:
+        if n > limite:
             raise ValueError("Corpo muito grande.")
         if not n:
             return {}
@@ -598,7 +680,13 @@ def agendador():
         try:
             m = CTX.monitor
             horas = CTX.config.dados["intervalo_horas"]
-            if horas and not m.rodando:
+            if m.varredura_ativa():
+                # v0.5: processos em blocos diários; filtros (OAB/CPF/texto) a cada `intervalo_horas`
+                m.iniciar_bloco_se_devido()
+                if (horas and not m.rodando and CTX.banco.oabs_ativas()
+                        and (m.ultimo_filtros is None or time.time() - m.ultimo_filtros >= horas * 3600)):
+                    m.solicitar_oab()
+            elif horas and not m.rodando:
                 if m.ultimo_ciclo is None:
                     ultima = CTX.banco.ultima_consulta_geral()
                     devido = True

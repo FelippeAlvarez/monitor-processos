@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.4.0)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.5.0)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -154,3 +154,34 @@ Para fazer backup, copie essa pasta. Para apagar tudo, feche o programa e apague
   MONITOR_ENDERECO=127.0.0.1, e coloque na frente um servidor web com HTTPS (por exemplo o Caddy, que obtém o certificado sozinho:
   "seudominio.com.br { reverse_proxy 127.0.0.1:8765 }"). Sem HTTPS, não exponha o programa à internet. Com MONITOR_PROXY=1 o
   programa confia nos cabeçalhos X-Forwarded-For/Proto do proxy; só ligue isso se o programa for acessível apenas por ele.
+
+19. VARREDURA DIÁRIA EM BLOCOS (novo na v0.5.0)
+- Para carteiras grandes (centenas ou milhares de processos), o programa não consulta tudo de uma vez: a cada N minutos ele pega um
+  BLOCO de processos ainda não consultados HOJE e consulta o DataJud e o DJEN de cada um. Cada processo é consultado uma vez por dia.
+  Os nunca consultados vão primeiro; depois, os de consulta mais antiga. No dia seguinte recomeça.
+- Configurações > "Varredura diária em blocos": tamanho do bloco (padrão 100), minutos entre blocos (padrão 30) e janela de horário
+  (padrão 07:00 às 20:00). Capacidade = blocos na janela x tamanho do bloco; o Painel avisa se for menor que o número de processos.
+  Exemplo: 100 por bloco, a cada 30 min, das 07:00 às 20:00 = 26 blocos = até 2.600 processos/dia.
+- Painel: barra "Varredura diária" mostra quantos já foram consultados hoje. Se a API reclamar de excesso de requisições (429), o
+  programa pausa sozinho e o restante segue no bloco seguinte. Processos com erro voltam por nova tentativa automática.
+- Os filtros de pesquisa (OAB, CPF/CNPJ, texto) continuam rodando a cada "intervalo" (Configurações; padrão 6 h) — é a forma mais
+  rápida de saber de publicações novas, inclusive em processos ainda não cadastrados.
+- O horário da janela é o do relógio do computador/servidor onde o programa roda. Num servidor na nuvem, confira o fuso horário
+  (muitos vêm em UTC, 3 horas à frente de Brasília) e ajuste o fuso do servidor para America/Sao_Paulo.
+- Desligando a varredura em blocos, o programa volta ao modo clássico (consulta todos os processos a cada intervalo).
+- Alertas: movimentação ou publicação nova aparecem no Painel/Publicações e, se o e-mail estiver ligado, são enviados por bloco.
+
+20. ORGANIZAR A CARTEIRA (novo na v0.5.0)
+- Importar de planilha (aba Adicionar): aceita .xlsx, .csv, .txt ou relatório exportado como página web. Procura números CNJ em qualquer
+  célula; se houver cabeçalho com "Cliente", "Pasta" ou "Apelido", essas colunas acompanham cada processo. Mostra uma prévia (novos,
+  repetidos, rejeitados) antes de cadastrar. Em lotes grandes, a primeira consulta de cada processo é feita pela varredura diária.
+  Arquivo .xls antigo (Excel 97-2003) não é lido: salve como .xlsx ou copie e cole as células na caixa de texto da aba Adicionar.
+- Descobrir processos pela OAB (aba Filtros): em um filtro de OAB, "Descobrir processos" busca no DJEN os processos que tiveram ao menos
+  uma publicação nos últimos N meses (padrão 12). "Ver descobertos" lista número, tribunal, classe, última publicação e quantas
+  publicações; processos já cadastrados ou arquivados são sinalizados, e você cadastra os novos de uma vez ou só os marcados.
+  Só guarda número, tribunal, classe, órgão e datas (não guarda o texto). Se o resultado vier parcial, o programa avisa (a API limita
+  a quantidade por consulta). Limite: só enxerga processos com publicação no DJEN em nome desse filtro; não é um inventário completo.
+- Arquivar: o botão "Arquivar" tira o processo das consultas sem apagá-lo (e "Reativar" o devolve). "Arquivar parados…" arquiva de uma vez
+  os processos sem NENHUMA movimentação nem publicação há mais de N meses (padrão 12), com prévia e confirmação. Processos nunca
+  consultados ou sem datas conhecidas não são arquivados. Se um processo arquivado voltar a aparecer numa publicação de um filtro, você é avisado.
+- Painel: busca por número, apelido, cliente ou pasta (sem diferenciar acentos) e filtro Ativos/Só com novidades/Com erro/Arquivados.

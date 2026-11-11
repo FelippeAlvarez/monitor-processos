@@ -7,6 +7,7 @@ Princípios (v0.1.1):
     o restante na fila para nova tentativa automática, em vez de marcar tudo como erro.
   - Processos do mesmo tribunal são consultados em lote (menos requisições).
 """
+import datetime as dt
 import logging
 import threading
 import time
@@ -14,6 +15,7 @@ import time
 import datajud
 import dje
 import mailer
+from db import inicio_do_dia_utc
 
 log = logging.getLogger("monitor")
 
@@ -54,10 +56,16 @@ class Monitor:
         self.proxima_oab = {}
         self.tentativas_oab = {}
         self.resumo_oab = None
+        self.fila_desc = {}        # oab_id -> dias (descoberta de processos pela OAB)
+        self.ultimo_bloco = 0.0    # epoch do início do último bloco da varredura diária
+        self.ultimo_filtros = None # epoch da última rodada dos filtros (OAB/CPF/texto)
         self.dje_pausado_ate = 0.0
         self.proxima_dje = {}
         self.tentativas_dje = {}
         self._dormir = time.sleep  # substituível em testes
+
+    def _ha_trabalho(self):
+        return bool(self.fila or self.fila_dje or self.fila_oab or self.fila_desc)
 
     # ------------------------------------------------------------------ fila
     def solicitar(self, ids=None, forcar=False):
@@ -68,7 +76,7 @@ class Monitor:
                 self.pausado_ate = 0.0
                 self.dje_pausado_ate = 0.0
             self.fila |= alvo
-            iniciar = bool(self.fila or self.fila_dje or self.fila_oab) and not self.rodando
+            iniciar = self._ha_trabalho() and not self.rodando
             if iniciar:
                 self.rodando = True
         if iniciar:
@@ -80,7 +88,7 @@ class Monitor:
         alvo = {p["id"] for p in self.banco.ativos(ids)}
         with self._lock:
             self.fila_dje |= alvo
-            iniciar = bool(self.fila or self.fila_dje or self.fila_oab) and not self.rodando
+            iniciar = self._ha_trabalho() and not self.rodando
             if iniciar:
                 self.rodando = True
         if iniciar:
@@ -94,12 +102,82 @@ class Monitor:
             if forcar:
                 self.dje_pausado_ate = 0.0
             self.fila_oab |= alvo
-            iniciar = bool(self.fila or self.fila_dje or self.fila_oab) and not self.rodando
+            iniciar = self._ha_trabalho() and not self.rodando
             if iniciar:
                 self.rodando = True
         if iniciar:
             threading.Thread(target=self._trabalhar, daemon=True).start()
         return len(alvo)
+
+    def solicitar_descoberta(self, oid, dias=365):
+        """Busca no DJEN os processos citados nos últimos `dias` dias por um filtro de OAB (descoberta de processos ativos)."""
+        if not self.banco.obter_oab(oid):
+            return 0
+        with self._lock:
+            self.fila_desc[oid] = int(dias)
+            self.dje_pausado_ate = 0.0
+            iniciar = self._ha_trabalho() and not self.rodando
+            if iniciar:
+                self.rodando = True
+        self.banco.registrar_descoberta_status(oid, "na fila", "")
+        if iniciar:
+            threading.Thread(target=self._trabalhar, daemon=True).start()
+        return 1
+
+    # ------------------------------------------------------- varredura diária em blocos
+    def _cfg_varredura(self):
+        return self.config.dados.get("varredura") or {}
+
+    def varredura_ativa(self):
+        return bool(self._cfg_varredura().get("ativa"))
+
+    @staticmethod
+    def _hhmm(texto, padrao):
+        try:
+            h, m = (int(x) for x in str(texto).split(":"))
+            return dt.time(h, m)
+        except ValueError:
+            return padrao
+
+    def na_janela(self, agora=None):
+        v = self._cfg_varredura()
+        a = (agora or dt.datetime.now()).time()
+        return self._hhmm(v.get("inicio"), dt.time(7, 0)) <= a < self._hhmm(v.get("fim"), dt.time(20, 0))
+
+    def candidatos_hoje(self, agora=None):
+        """Ids ainda não consultados hoje, na ordem de prioridade (nunca consultados primeiro)."""
+        t = time.time()
+        return [p["id"] for p in self.banco.candidatos_varredura(inicio_do_dia_utc(agora))
+                if self.proxima.get(p["id"], 0) <= t]
+
+    def iniciar_bloco_se_devido(self, agora=None):
+        """Chamado pelo agendador. Enfileira o próximo bloco da varredura diária, se estiver na janela de horário, se já
+        passou o intervalo desde o último bloco e se há processos não consultados hoje. Devolve quantos foram enfileirados."""
+        if not self.varredura_ativa() or self.rodando or not self.na_janela(agora):
+            return 0
+        v = self._cfg_varredura()
+        if time.time() < self.pausado_ate or time.time() - self.ultimo_bloco < int(v.get("intervalo_min", 30)) * 60:
+            return 0
+        ids = self.candidatos_hoje(agora)[:int(v.get("bloco", 100))]
+        if not ids:
+            return 0
+        self.ultimo_bloco = time.time()
+        log.info("Varredura diária: bloco de %d processo(s)", len(ids))
+        return self.solicitar(set(ids))
+
+    def resumo_varredura(self, agora=None):
+        v = self._cfg_varredura()
+        ativos = len(self.banco.ativos())
+        feitos = self.banco.consultados_desde(inicio_do_dia_utc(agora))
+        intervalo = int(v.get("intervalo_min", 30)) or 30
+        ini, fim = self._hhmm(v.get("inicio"), dt.time(7, 0)), self._hhmm(v.get("fim"), dt.time(20, 0))
+        minutos = (fim.hour * 60 + fim.minute) - (ini.hour * 60 + ini.minute)
+        blocos = max(0, minutos // intervalo)
+        return {"ativa": self.varredura_ativa(), "ativos": ativos, "feitos_hoje": feitos,
+                "restantes": max(0, ativos - feitos), "bloco": int(v.get("bloco", 100)), "intervalo_min": intervalo,
+                "inicio": v.get("inicio"), "fim": v.get("fim"), "na_janela": self.na_janela(agora),
+                "capacidade_dia": blocos * int(v.get("bloco", 100)),
+                "proximo_bloco": (self.ultimo_bloco + intervalo * 60) if self.ultimo_bloco else None}
 
     def agendar_pendentes(self):
         """Chamado pelo agendador: recoloca na fila processos pendentes/com erro cuja espera acabou."""
@@ -109,12 +187,14 @@ class Monitor:
         n = 0
         if agora >= self.pausado_ate:
             ids = {p["id"] for p in self.banco.ativos()
-                   if p["status"] in ("pendente", "erro") and self.proxima.get(p["id"], 0) <= agora}
+                   if p["status"] in ("pendente", "erro") and self.proxima.get(p["id"], 0) <= agora
+                   and (p["status"] == "erro" or p["id"] in self.proxima or not self.varredura_ativa())}
             if ids:
                 n += self.solicitar(ids)
         if (not self.rodando and self.config.dados.get("dje_ativo", True) and agora >= self.dje_pausado_ate):
             ids = {p["id"] for p in self.banco.ativos()
-                   if p["dje_status"] in ("pendente", "erro") and self.proxima_dje.get(p["id"], 0) <= agora}
+                   if p["dje_status"] in ("pendente", "erro") and self.proxima_dje.get(p["id"], 0) <= agora
+                   and (p["dje_status"] == "erro" or p["id"] in self.proxima_dje or not self.varredura_ativa())}
             if ids:
                 n += self.solicitar_dje(ids)
         if (not self.rodando and self.config.dados.get("dje_ativo", True) and agora >= self.dje_pausado_ate):
@@ -128,7 +208,7 @@ class Monitor:
         try:
             while True:
                 with self._lock:
-                    if not self.fila and not self.fila_dje and not self.fila_oab:
+                    if not self._ha_trabalho():
                         self.rodando = False
                         return
                     ids = set(self.fila)
@@ -137,12 +217,16 @@ class Monitor:
                     self.fila_dje.clear()
                     ids_oab = set(self.fila_oab)
                     self.fila_oab.clear()
+                    desc = dict(self.fila_desc)
+                    self.fila_desc.clear()
                 if ids:
                     self.executar(ids)
                 if ids_dje:
                     self.executar(ids_dje, usar_datajud=False)
                 if ids_oab:
                     self.executar_oab(ids_oab)
+                for oid, dias in desc.items():
+                    self.executar_descoberta(oid, dias)
         except Exception:  # noqa: BLE001 - rede de segurança: o trabalhador nunca deve morrer calado
             log.exception("Falha inesperada no trabalhador de consultas")
             with self._lock:
@@ -277,8 +361,66 @@ class Monitor:
             resumo["email"] = "sem novidades"
         self.resumo_oab = resumo
         self.ultimo_ciclo = time.time()
+        self.ultimo_filtros = time.time()
         log.info("Consulta por OAB concluída: %s", resumo)
         return resumo
+
+    def executar_descoberta(self, oid, dias=365):
+        """Descobre os processos citados no DJEN pelo filtro nos últimos `dias` dias (com 1+ publicação no período).
+        Guarda só número, tribunal, classe, órgão, contagem e data da última publicação — não guarda o texto."""
+        o = self.banco.obter_oab(oid)
+        if not o:
+            return None
+        desde = (dt.date.today() - dt.timedelta(days=dias)).isoformat()
+        if not self.config.dados.get("dje_ativo", True):
+            self.banco.registrar_descoberta_status(oid, "erro", "DJEN desativado em Configurações.", desde)
+            return None
+        base = self.config.dados.get("dje_base_url", dje.BASE_URL)
+        rotulo = dje.descrever_filtro(o["tipo"], o["numero"], o["uf"])
+        self.banco.registrar_descoberta_status(oid, "buscando", "", desde)
+        self.progresso = f"Descoberta {rotulo}"
+        try:
+            itens, truncado = self._com_espera(
+                f"descoberta {rotulo}",
+                lambda: dje.consultar_busca(o["tipo"], o["numero"], o["uf"], base, desde=desde, max_paginas=100),
+                canal="dje")
+        except LimiteExcedido as e:
+            self.dje_pausado_ate = time.time() + self.pausa_limite
+            self.banco.registrar_descoberta_status(oid, "erro", f"{e} Tente de novo mais tarde.", desde)
+            return None
+        except datajud.ErroAPI as e:
+            self.banco.registrar_descoberta_status(oid, "erro", str(e), desde)
+            return None
+        except Exception as e:  # noqa: BLE001
+            log.exception("Erro inesperado na descoberta")
+            self.banco.registrar_descoberta_status(oid, "erro", f"Erro inesperado: {e}", desde)
+            return None
+        finally:
+            self.progresso = ""
+        grupos, ignorados = {}, 0
+        for it in itens:
+            try:
+                info = datajud.interpretar_numero(it["numero"])
+                datajud.alias_tribunal(info["j"], info["tr"])
+            except (datajud.ErroNumero, datajud.TribunalNaoSuportado):
+                ignorados += 1
+                continue
+            g = grupos.setdefault(info["limpo"], {"numero": info["numero"], "numero_limpo": info["limpo"],
+                                                  "tribunal": it["tribunal"], "classe": "", "orgao": "",
+                                                  "n_pubs": 0, "ultima_data": ""})
+            g["n_pubs"] += 1
+            if it["data_disp"] >= g["ultima_data"]:
+                g["ultima_data"] = it["data_disp"]
+                g["classe"] = it["classe"] or g["classe"]
+                g["orgao"] = it["orgao"] or g["orgao"]
+        self.banco.registrar_descobertos(oid, list(grupos.values()))
+        aviso = ("Resultado parcial: a API limita a quantidade de publicações por consulta; pode haver outros processos. "
+                 "Repita depois ou use filtros mais específicos." if truncado else "")
+        if ignorados:
+            aviso = (aviso + " " if aviso else "") + f"{ignorados} publicação(ões) de processo(s) com número ou tribunal não suportado foram ignoradas."
+        self.banco.registrar_descoberta_status(oid, "ok", aviso, desde, truncado, ignorados)
+        log.info("Descoberta %s: %d processo(s) em %d publicação(ões) desde %s", rotulo, len(grupos), len(itens), desde)
+        return len(grupos)
 
     def _falha_oab(self, o, mensagem, resumo):
         self.banco.registrar_oab_status(o["id"], "erro", mensagem)

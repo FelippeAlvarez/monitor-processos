@@ -16,6 +16,8 @@ PADRAO = {
     "endpoints_override": {},
     "dje_ativo": True,
     "dje_base_url": "https://comunicaapi.pje.jus.br",
+    # v0.5: varredura diária dos processos em blocos (cada processo consultado 1x por dia, dentro da janela de horário)
+    "varredura": {"ativa": True, "bloco": 100, "intervalo_min": 30, "inicio": "07:00", "fim": "20:00"},
     "pasta_backup": "",          # vazio = <pasta de dados>/backups (pode ser uma pasta do Dropbox)
     "backup_ativo": True,
     "backup_hora": "02:00",
@@ -85,6 +87,28 @@ class Config:
                 d["intervalo_horas"] = h
             if "dje_ativo" in novo:
                 d["dje_ativo"] = bool(novo["dje_ativo"])
+            v = novo.get("varredura")
+            if isinstance(v, dict):
+                nv = dict(d["varredura"])
+                if "ativa" in v:
+                    nv["ativa"] = bool(v["ativa"])
+                if "bloco" in v:
+                    nv["bloco"] = int(v["bloco"])
+                    if not 10 <= nv["bloco"] <= 500:
+                        raise ValueError("O tamanho do bloco deve ficar entre 10 e 500 processos.")
+                if "intervalo_min" in v:
+                    nv["intervalo_min"] = int(v["intervalo_min"])
+                    if not 5 <= nv["intervalo_min"] <= 240:
+                        raise ValueError("O intervalo entre blocos deve ficar entre 5 e 240 minutos.")
+                for campo in ("inicio", "fim"):
+                    if campo in v:
+                        hora = str(v[campo]).strip()
+                        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", hora):
+                            raise ValueError("Horário da varredura inválido (use HH:MM).")
+                        nv[campo] = hora
+                if nv["inicio"] >= nv["fim"]:
+                    raise ValueError("O horário de início da varredura deve ser anterior ao de fim.")
+                d["varredura"] = nv
             if "pasta_backup" in novo:
                 d["pasta_backup"] = str(novo["pasta_backup"]).strip()[:300]
             if "backup_ativo" in novo:
