@@ -1,0 +1,16 @@
+{
+  "nome": "Monitor de Processos",
+  "versao": "0.3.2",
+  "titular": "Felippe Alvarez de Sá",
+  "ano": 2026,
+  "licenca": "Proprietária — todos os direitos reservados (arquivo LICENSE)",
+  "contato": null,
+  "creditos": [
+    "Dados: API Pública do DataJud — Conselho Nacional de Justiça (CNJ)",
+    "Publicações: DJEN – Diário de Justiça Eletrônico Nacional, via API Comunica PJe — CNJ",
+    "Desenvolvido com auxílio do Claude (Anthropic)",
+    "Construído apenas com a biblioteca padrão do Python"
+  ],
+  "termos_cnj": "https://formularios.cnj.jus.br/wp-content/uploads/2023/11/Termos-de-uso-api-publica-V1.2.pdf",
+  "wiki": "https://datajud-wiki.cnj.jus.br/api-publica/"
+}

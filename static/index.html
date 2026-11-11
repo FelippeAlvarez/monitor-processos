@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monitor de Processos</title>
+<style>
+  :root { --bg:#f5f6f8; --card:#fff; --tx:#1c2430; --mut:#667085; --bd:#e1e5ea; --ac:#1f4e79; --ok:#18794e; --warn:#b54708; --err:#b42318; --new:#d92d20; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12161c; --card:#1b212a; --tx:#e7ebf0; --mut:#98a2b3; --bd:#2c3440; --ac:#6ba6dd; --ok:#4cc38a; --warn:#f0a33c; --err:#f97066; --new:#f97066; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.45 system-ui, "Segoe UI", sans-serif; background:var(--bg); color:var(--tx); }
+  header { background:var(--ac); color:#fff; padding:12px 20px; }
+  header h1 { margin:0; font-size:18px; }
+  .aviso { background:#fff4e5; color:#7a4a00; padding:8px 20px; font-size:13px; border-bottom:1px solid #f0d9b5; }
+  @media (prefers-color-scheme: dark) { .aviso { background:#3a2a10; color:#f3cf94; border-color:#5a4220; } }
+  nav { display:flex; gap:4px; padding:10px 20px 0; flex-wrap:wrap; }
+  nav button { border:0; background:transparent; color:var(--mut); padding:8px 14px; cursor:pointer; font:inherit; border-bottom:2px solid transparent; }
+  nav button.on { color:var(--ac); border-color:var(--ac); font-weight:600; }
+  main { padding:16px 20px 40px; max-width:1100px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--bd); border-radius:10px; padding:14px 16px; margin-bottom:14px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:14px; }
+  .cards .card { margin:0; } .cards b { display:block; font-size:24px; }
+  button.b { background:var(--ac); color:#fff; border:0; border-radius:7px; padding:8px 14px; cursor:pointer; font:inherit; }
+  button.b.sec { background:transparent; color:var(--ac); border:1px solid var(--ac); }
+  button.b.dg { background:transparent; color:var(--err); border:1px solid var(--err); }
+  button.b:disabled { opacity:.5; cursor:default; }
+  button.sm { padding:3px 9px; font-size:13px; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--bd); vertical-align:top; }
+  th { color:var(--mut); font-weight:600; font-size:13px; }
+  .badge { display:inline-block; background:var(--new); color:#fff; border-radius:10px; padding:0 8px; font-size:12px; font-weight:600; }
+  .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--err); } .mut { color:var(--mut); font-size:13px; }
+  .num { font-family:ui-monospace, Consolas, monospace; font-size:13px; white-space:nowrap; }
+  input, textarea { width:100%; padding:8px; border:1px solid var(--bd); border-radius:7px; font:inherit; background:var(--bg); color:var(--tx); }
+  label { display:block; margin:10px 0 4px; font-weight:600; font-size:13px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; } @media (max-width:640px) { .grid2 { grid-template-columns:1fr; } }
+  .mov td { font-size:13px; } .mov tr.n td { background:rgba(217,45,32,.08); }
+  .acoes { display:flex; gap:6px; flex-wrap:wrap; }
+  pre.doc { white-space:pre-wrap; font:13px/1.5 ui-monospace, Consolas, monospace; background:var(--bg); padding:12px; border-radius:8px; max-height:420px; overflow:auto; }
+  .hide { display:none; }
+  .pub { border:1px solid var(--bd); border-radius:8px; padding:10px 12px; margin-bottom:10px; }
+  .pub.n { border-left:4px solid var(--new); }
+  .pub.c { opacity:.6; }
+  .pub .tx { white-space:pre-wrap; margin-top:8px; font-size:14px; max-height:none; }
+  .tag { display:inline-block; border:1px solid var(--warn); color:var(--warn); border-radius:10px; padding:0 8px; font-size:12px; }
+  #msg { position:fixed; bottom:16px; right:16px; background:var(--tx); color:var(--bg); padding:10px 14px; border-radius:8px; max-width:380px; display:none; }
+</style>
+</head>
+<body>
+<header><h1>Monitor de Processos <span class="mut" style="color:#cfe0f2" id="ver"></span></h1></header>
+<div class="aviso"><b>Atenção:</b> movimentações vêm do DataJud (metadados, com defasagem) e publicações do DJEN (Comunica PJe).
+Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, as intimações oficiais nem o controle de prazos.</b></div>
+<nav id="nav">
+  <button data-t="painel" class="on">Painel</button>
+  <button data-t="publicacoes">Publicações <span class="badge hide" id="nav-pub"></span></button>
+  <button data-t="oab">Filtros <span class="badge hide" id="nav-oab"></span></button>
+  <button data-t="adicionar">Adicionar</button>
+  <button data-t="config">Configurações</button>
+  <button data-t="sobre">Sobre</button>
+</nav>
+<main>
+<section id="t-painel">
+  <div class="cards">
+    <div class="card"><span class="mut">Processos</span><b id="c-total">0</b></div>
+    <div class="card"><span class="mut">Com novidades</span><b id="c-novos">0</b></div>
+    <div class="card"><span class="mut">Publicações novas (DJEN)</span><b id="c-pubs">0</b></div>
+    <div class="card"><span class="mut">Publicações novas (filtros)</span><b id="c-oab">0</b></div>
+    <div class="card"><span class="mut">Com erro</span><b id="c-erros">0</b></div>
+    <div class="card"><span class="mut">Não constam no DataJud</span><b id="c-nao">0</b></div>
+    <div class="card"><span class="mut">Última consulta</span><b id="c-ult" style="font-size:15px">—</b></div>
+  </div>
+  <div class="acoes" style="margin-bottom:12px">
+    <button class="b" id="b-consultar">Consultar agora</button>
+    <button class="b sec" id="b-visto-todos">Marcar tudo como visto</button>
+    <span class="mut" id="st-txt" style="align-self:center"></span>
+  </div>
+  <div class="card" style="padding:6px 10px; overflow-x:auto">
+    <table><thead><tr><th>Processo</th><th>Última movimentação</th><th>Situação / DJEN</th><th></th></tr></thead>
+    <tbody id="lista"></tbody></table>
+    <p class="mut hide" id="vazio" style="padding:10px">Nenhum processo cadastrado. Use a aba “Adicionar”.</p>
+  </div>
+  <div class="card hide" id="detalhe"></div>
+</section>
+
+<section id="t-publicacoes" class="hide">
+  <div class="card">
+    <div class="acoes">
+      <label style="margin:0"><input type="checkbox" id="p-novas" style="width:auto"> Mostrar só as não vistas</label>
+      <button class="b sec sm" id="b-pub-vistas">Marcar todas como vistas</button>
+      <span class="mut" id="p-info" style="align-self:center"></span>
+    </div>
+    <p class="mut">Publicações do Diário de Justiça Eletrônico Nacional (DJEN), consultadas pelo número do processo. Na primeira consulta de cada processo,
+    só as publicações dos últimos 15 dias contam como novas. Apoio à conferência: <b>a contagem de prazo é responsabilidade do advogado</b>, com base na publicação oficial.</p>
+  </div>
+  <div id="p-lista"></div>
+</section>
+
+<section id="t-oab" class="hide">
+  <div class="card">
+    <b>Filtros de pesquisa no DJEN</b>
+    <p class="mut">Cadastre quantos filtros quiser: OAB, CPF/CNPJ ou trecho de texto. O programa avisa de publicações <b>novas</b> em processos que você
+    <b>ainda não cadastrou</b> (os já cadastrados são acompanhados na aba Publicações). Ao cadastrar, valem só as publicações dos últimos 2 dias em diante;
+    nada do histórico antigo é buscado nem guardado.</p>
+    <div class="grid2">
+      <div><label for="o-tipo">Tipo de filtro</label><select id="o-tipo" style="width:100%;padding:8px">
+        <option value="oab">OAB</option><option value="doc">CPF ou CNPJ</option><option value="texto">Trecho de texto</option></select></div>
+      <div></div>
+      <div><label for="o-num" id="o-num-l">Número da OAB (só dígitos; letra final opcional)</label><input id="o-num" placeholder="123456"></div>
+      <div id="o-uf-box"><label for="o-uf">UF</label><select id="o-uf" style="width:100%;padding:8px"></select></div>
+    </div>
+    <p class="warn hide" id="o-aviso" style="font-size:13px">CPF/CNPJ e texto são buscados <b>dentro do texto</b> das publicações: só aparecem as que citam o termo
+    (despachos curtos costumam trazer só o nome da parte). Pode perder publicações; use como alerta adicional.</p>
+    <label for="o-rot">Identificação (opcional, só para você)</label><input id="o-rot" placeholder="ex.: Fulano">
+    <div class="acoes" style="margin-top:10px"><button class="b" id="b-oab-add">Cadastrar filtro</button><span class="mut" id="o-res" style="align-self:center"></span></div>
+  </div>
+  <div class="card" style="padding:6px 10px; overflow-x:auto">
+    <table><thead><tr><th>Filtro</th><th>Situação</th><th>Publicações</th><th></th></tr></thead><tbody id="o-lista"></tbody></table>
+    <p class="mut hide" id="o-vazio" style="padding:10px">Nenhum filtro cadastrado.</p>
+  </div>
+  <div class="card">
+    <div class="acoes">
+      <label style="margin:0"><input type="checkbox" id="op-novas" style="width:auto" checked> Mostrar só as não vistas</label>
+      <button class="b sec sm" id="b-op-vistas">Marcar todas como vistas</button>
+      <span class="mut" id="op-info" style="align-self:center"></span>
+    </div>
+    <p class="mut">A OAB é comparada como texto exato pelo DJEN: se o tribunal grava o número com sufixo (ex.: -A, -O), cadastre também essa variante.
+    Apoio à conferência: <b>não conte prazo por este aviso</b>.</p>
+  </div>
+  <div id="op-lista"></div>
+</section>
+
+<section id="t-adicionar" class="hide">
+  <div class="card">
+    <label for="a-num">Número(s) CNJ — um ou vários (um por linha, ou colados de uma planilha)</label>
+    <textarea id="a-num" rows="6" placeholder="0000000-00.0000.0.00.0000"></textarea>
+    <div class="grid2">
+      <div><label for="a-apelido">Apelido (só quando for um processo)</label><input id="a-apelido"></div>
+      <div><label for="a-cliente">Cliente (aplicado a todos)</label><input id="a-cliente"></div>
+    </div>
+    <label for="a-pasta">Pasta (aplicada a todos)</label><input id="a-pasta">
+    <p class="mut">O dígito verificador é conferido. Na primeira consulta, o histórico existente vira base de comparação: só movimentações posteriores geram alerta.</p>
+    <button class="b" id="b-add">Adicionar e consultar</button>
+    <div id="a-res" class="mut" style="margin-top:10px"></div>
+  </div>
+</section>
+
+<section id="t-config" class="hide">
+  <div class="card">
+    <label for="k-key">Chave da API pública do DataJud</label>
+    <input id="k-key" autocomplete="off">
+    <p class="mut">O CNJ pode trocar a chave a qualquer momento. A atual fica em datajud-wiki.cnj.jus.br/api-publica/acesso — se as consultas passarem a dar erro 401/403, atualize aqui.</p>
+    <label><input type="checkbox" id="k-dje" style="width:auto"> Consultar também as publicações do DJEN (Comunica PJe, CNJ)</label>
+    <p class="mut">Cada processo é consultado pelo número no servidor comunicaapi.pje.jus.br. Desmarque para usar somente o DataJud.</p>
+    <label for="k-int">Intervalo entre consultas automáticas (horas; 0 = desligado)</label>
+    <input id="k-int" type="number" min="0" max="168" step="1" style="max-width:160px">
+  </div>
+  <div class="card">
+    <label><input type="checkbox" id="e-ativo" style="width:auto"> Enviar alerta por e-mail quando houver movimentação nova</label>
+    <div class="grid2">
+      <div><label for="e-host">Servidor SMTP</label><input id="e-host"></div>
+      <div><label for="e-porta">Porta (465 = SSL; 587 = STARTTLS)</label><input id="e-porta" type="number"></div>
+      <div><label for="e-user">Usuário (e-mail de envio)</label><input id="e-user" autocomplete="off"></div>
+      <div><label for="e-senha">Senha de aplicativo</label><input id="e-senha" type="password" autocomplete="new-password" placeholder="(deixe vazio para manter a atual)"></div>
+      <div><label for="e-rem">Remetente (opcional)</label><input id="e-rem"></div>
+      <div><label for="e-dest">Destinatário</label><input id="e-dest"></div>
+    </div>
+    <p class="mut">Gmail: use uma “senha de app” criada só para esta finalidade, nunca a senha da conta. A senha fica gravada em texto simples no arquivo <code>dados/config.json</code> deste computador.</p>
+    <div class="acoes"><button class="b" id="b-cfg">Salvar</button><button class="b sec" id="b-teste">Enviar e-mail de teste (salve antes)</button></div>
+  </div>
+</section>
+
+<section id="t-sobre" class="hide">
+  <div class="card" id="sobre-info"></div>
+  <div class="card">
+    <div class="acoes">
+      <button class="b sec sm" data-doc="manual">Manual de uso</button>
+      <button class="b sec sm" data-doc="termos">Termos de uso</button>
+      <button class="b sec sm" data-doc="privacidade">Política de privacidade</button>
+      <button class="b sec sm" data-doc="log">Registro de diagnóstico (log)</button>
+    </div>
+    <pre class="doc hide" id="doc"></pre>
+  </div>
+</section>
+</main>
+<div id="msg"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function api(url, metodo = "GET", corpo) {
+  const r = await fetch(url, { method: metodo, headers: {"Content-Type": "application/json"}, body: corpo ? JSON.stringify(corpo) : undefined });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.erro || ("Erro " + r.status));
+  return d;
+}
+function aviso(t) { const m = $("#msg"); m.textContent = t; m.style.display = "block"; clearTimeout(m._t); m._t = setTimeout(() => m.style.display = "none", 5000); }
+function fmt(s) { // formata sem converter fuso (o tribunal envia horário local)
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/.exec(s || "");
+  return m ? `${m[3]}/${m[2]}/${m[1]}` + (m[4] ? ` ${m[4]}:${m[5]}` : "") : (s || "—");
+}
+function fmtUtc(s) { return s ? new Date(s).toLocaleString("pt-BR") : "—"; }
+
+// abas
+document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
+  document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x === b));
+  document.querySelectorAll("main > section").forEach(s => s.classList.toggle("hide", s.id !== "t-" + b.dataset.t));
+  if (b.dataset.t === "config") carregarConfig();
+  if (b.dataset.t === "sobre") carregarSobre();
+  if (b.dataset.t === "publicacoes") carregarPublicacoes();
+  if (b.dataset.t === "oab") carregarOab();
+});
+
+// painel
+const DJE = { ok: "consultado", pendente: "na fila", erro: "erro (nova tentativa automática)" };
+const SIT = { ok: ["ok", "Atualizado"], pendente: ["mut", "Na fila (1ª consulta pendente)"], nao_encontrado: ["warn", "Não encontrado"], erro: ["err", "Erro — nova tentativa automática"] };
+async function carregarLista() {
+  const lista = await api("/api/processos");
+  $("#c-total").textContent = lista.length;
+  $("#c-novos").textContent = lista.filter(p => p.novos > 0).length;
+  const pn = lista.reduce((a, p) => a + (p.pub_novas || 0), 0);
+  $("#c-pubs").textContent = pn;
+  $("#nav-pub").textContent = pn; $("#nav-pub").classList.toggle("hide", pn === 0);
+  carregarContadorOab();
+  $("#c-erros").textContent = lista.filter(p => p.status === "erro").length;
+  $("#c-nao").textContent = lista.filter(p => p.status === "nao_encontrado").length;
+  $("#vazio").classList.toggle("hide", lista.length > 0);
+  $("#lista").innerHTML = lista.map(p => {
+    const [cls, txt] = SIT[p.status] || ["mut", p.status];
+    return `<tr>
+      <td>${p.apelido ? `<b>${esc(p.apelido)}</b> ` : ""}${p.novos ? `<span class="badge">${p.novos} mov. nova(s)</span> ` : ""}${p.pub_novas ? `<span class="badge">${p.pub_novas} publ. nova(s)</span>` : ""}${p.apelido || p.novos || p.pub_novas ? "<br>" : ""}
+        <span class="num">${esc(p.numero)}</span>${p.cliente || p.pasta ? `<br><span class="mut">${esc(p.cliente)}${p.pasta ? " · pasta " + esc(p.pasta) : ""}</span>` : ""}</td>
+      <td>${esc(p.ultimo_mov || "—")}<br><span class="mut">${fmt(p.ultimo_mov_data)}${p.classe ? " · " + esc(p.classe) : ""}</span>
+        ${p.ultima_atualizacao ? `<br><span class="mut">registro do CNJ atualizado em ${fmt(p.ultima_atualizacao)}</span>` : ""}</td>
+      <td><span class="${cls}">${txt}</span>${p.mensagem ? `<br><span class="mut">${esc(p.mensagem)}</span>` : ""}<br><span class="mut">consultado: ${fmtUtc(p.ultima_consulta)}</span>
+        <br><span class="mut">DJEN: ${DJE[p.dje_status] || "—"}${p.pub_total ? ` · ${p.pub_total} publ.${p.pub_ultima ? ", última em " + fmt(p.pub_ultima) : ""}` : ""}</span>${p.dje_status === "erro" && p.dje_mensagem ? `<br><span class="err" style="font-size:13px">${esc(p.dje_mensagem)}</span>` : ""}</td>
+      <td><div class="acoes">
+        <button class="b sm sec" data-ver="${p.id}">Movimentos</button>
+        <button class="b sm sec" data-upd="${p.id}">Atualizar</button>
+        <button class="b sm dg" data-del="${p.id}">Remover</button></div></td></tr>`;
+  }).join("");
+}
+$("#lista").onclick = async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  try {
+    if (b.dataset.ver) await verMovimentos(b.dataset.ver);
+    if (b.dataset.upd) { await api(`/api/processos/${b.dataset.upd}/consultar`, "POST", {}); aviso("Processo colocado na fila de consulta."); status(); }
+    if (b.dataset.del && confirm("Remover este processo e o histórico guardado?")) { await api(`/api/processos/${b.dataset.del}`, "DELETE"); carregarLista(); }
+  } catch (err) { aviso(err.message); }
+};
+async function verMovimentos(id) {
+  const movs = await api(`/api/processos/${id}/movimentos`);
+  const d = $("#detalhe"); d.classList.remove("hide");
+  d.innerHTML = `<div class="acoes" style="justify-content:space-between"><b>Movimentações (${movs.length})</b>
+    <span><button class="b sm sec" data-visto="${id}">Marcar como visto</button> <button class="b sm sec" id="fechar">Fechar</button></span></div>
+    <table class="mov"><thead><tr><th>Data</th><th>Movimento</th><th>Grau</th></tr></thead><tbody>` +
+    movs.map(m => `<tr class="${m.visto ? "" : "n"}"><td>${fmt(m.data_hora)}</td><td>${esc(m.nome)}${m.complementos ? `<br><span class="mut">${esc(m.complementos)}</span>` : ""}</td><td>${esc(m.grau)}</td></tr>`).join("") +
+    `</tbody></table>`;
+  d.scrollIntoView({ behavior: "smooth" });
+}
+$("#detalhe").onclick = async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.id === "fechar") $("#detalhe").classList.add("hide");
+  if (b.dataset.visto) { await api(`/api/processos/${b.dataset.visto}/visto`, "POST", {}); await carregarLista(); verMovimentos(b.dataset.visto); }
+};
+$("#b-consultar").onclick = async () => { try { const r = await api("/api/consultar", "POST", {}); aviso(`${r.enfileirados} processo(s) na fila de consulta.`); status(); } catch (e) { aviso(e.message); } };
+$("#b-visto-todos").onclick = async () => { await api("/api/visto-todos", "POST", {}); carregarLista(); };
+
+let rodandoAntes = false;
+async function status() {
+  try {
+    const s = await api("/api/status");
+    $("#c-ult").textContent = fmtUtc(s.ultima_consulta);
+    const partes = [];
+    if (s.rodando) partes.push(`Consultando… ${s.progresso || "iniciando"}${s.fila ? ` (+${s.fila} na fila)` : ""}`);
+    if (s.dje_pausado_ate) partes.push("Limite do DJEN atingido: pausa até " + new Date(s.dje_pausado_ate * 1000).toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"}));
+    if (s.pausado_ate) partes.push("Limite de requisições do CNJ atingido: pausa até " + new Date(s.pausado_ate * 1000).toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"}) + " (o restante segue na fila)");
+    if (!s.rodando && s.pendentes) partes.push(`${s.pendentes} processo(s) pendente(s) ou com erro — nova tentativa automática`);
+    if (!s.rodando && s.proximo_ciclo) partes.push("próxima consulta geral: " + new Date(s.proximo_ciclo * 1000).toLocaleString("pt-BR"));
+    else if (!s.rodando && !s.intervalo_horas) partes.push("consulta automática desligada");
+    if (s.resumo && !s.rodando) partes.push(`último ciclo: ${s.resumo.consultados} consultado(s), ${s.resumo.novos} novidade(s), ${s.resumo.erros} erro(s), ${s.resumo.publicacoes_novas || 0} publicação(ões) nova(s), e-mail: ${s.resumo.email}`);
+    if (s.oab_resumo && !s.rodando) partes.push(`OAB: ${s.oab_resumo.consultadas} consultada(s), ${s.oab_resumo.novas} publicação(ões) nova(s)${s.oab_resumo.aviso ? " — " + s.oab_resumo.aviso : ""}`);
+    if (s.resumo && s.resumo.dje_aviso && !s.rodando) partes.push("DJEN: " + s.resumo.dje_aviso);
+    $("#st-txt").textContent = partes.join(" · ");
+    if (rodandoAntes && !s.rodando) { carregarLista(); if (!$("#t-oab").classList.contains("hide")) carregarOab(); }
+    rodandoAntes = s.rodando;
+  } catch (e) { $("#st-txt").textContent = "Sem comunicação com o programa."; }
+}
+
+// publicações
+function lista(json) { try { return JSON.parse(json || "[]"); } catch (e) { return []; } }
+async function carregarPublicacoes() {
+  const so = $("#p-novas").checked;
+  const pubs = await api("/api/publicacoes" + (so ? "?novas=1" : ""));
+  $("#p-info").textContent = pubs.length + " publicação(ões)" + (pubs.length >= 300 ? " (mostrando as 300 mais recentes)" : "");
+  $("#p-lista").innerHTML = pubs.length ? pubs.map(b => {
+    const advs = lista(b.advogados).map(a => `${esc(a.nome)} (OAB ${esc(a.oab)})`).join("; ");
+    const dest = lista(b.destinatarios).map(d => esc(d.nome) + (d.polo ? " [" + esc(d.polo) + "]" : "")).join("; ");
+    return `<div class="pub ${b.visto ? "" : "n"} ${b.cancelada ? "c" : ""}">
+      <div class="acoes" style="justify-content:space-between"><span><b>${fmt(b.data_disp)}</b> · ${esc(b.tipo_com)}${b.tipo_doc ? " · " + esc(b.tipo_doc) : ""}
+        ${b.visto ? "" : '<span class="badge">nova</span>'} ${b.cancelada ? '<span class="tag">cancelada/inativa</span>' : ""}</span>
+        <span class="num">${esc(b.numero)}</span></div>
+      <div class="mut">${b.apelido ? esc(b.apelido) + " · " : ""}${b.cliente ? esc(b.cliente) + " · " : ""}${esc(b.orgao)}${b.classe ? " · " + esc(b.classe) : ""}</div>
+      ${dest ? `<div class="mut">Destinatários: ${dest}</div>` : ""}${advs ? `<div class="mut">Advogados: ${advs}</div>` : ""}
+      <div class="tx">${esc(b.texto)}</div>
+      <div class="mut" style="margin-top:6px">${esc(b.meio)}</div></div>`;
+  }).join("") : '<div class="card mut">Nenhuma publicação para exibir.</div>';
+}
+$("#p-novas").onchange = carregarPublicacoes;
+$("#b-pub-vistas").onclick = async () => { try { await api("/api/publicacoes/visto", "POST", {}); carregarPublicacoes(); carregarLista(); } catch (e) { aviso(e.message); } };
+
+// OAB
+const UFS = ["AC","AL","AM","AP","BA","CE","DF","ES","GO","MA","MG","MS","MT","PA","PB","PE","PI","PR","RJ","RN","RO","RR","RS","SC","SE","SP","TO"];
+$("#o-uf").innerHTML = UFS.map(u => `<option ${u === "RJ" ? "selected" : ""}>${u}</option>`).join("");
+const descFiltro = (t, n, uf) => t === "doc" ? "CPF/CNPJ " + (n.length === 11 ? `${n.slice(0,3)}.${n.slice(3,6)}.${n.slice(6,9)}-${n.slice(9)}` : n.length === 14 ? `${n.slice(0,2)}.${n.slice(2,5)}.${n.slice(5,8)}/${n.slice(8,12)}-${n.slice(12)}` : n)
+  : t === "texto" ? `texto “${n}”` : `OAB ${n}/${uf}`;
+$("#o-tipo").onchange = () => {
+  const t = $("#o-tipo").value;
+  $("#o-uf-box").classList.toggle("hide", t !== "oab"); $("#o-aviso").classList.toggle("hide", t === "oab");
+  $("#o-num-l").textContent = t === "oab" ? "Número da OAB (só dígitos; letra final opcional)" : t === "doc" ? "CPF ou CNPJ" : "Trecho de texto (6 a 80 caracteres)";
+  $("#o-num").placeholder = t === "oab" ? "123456" : t === "doc" ? "000.000.000-00 ou 00.000.000/0000-00" : "ex.: nome de condomínio";
+};
+const cnjMask = (n) => n.length === 20 ? `${n.slice(0,7)}-${n.slice(7,9)}.${n.slice(9,13)}.${n[13]}.${n.slice(14,16)}.${n.slice(16)}` : n;
+async function carregarContadorOab() {
+  try {
+    const os = await api("/api/oabs"); const n = os.reduce((a, o) => a + (o.pub_novas || 0), 0);
+    $("#c-oab").textContent = n; $("#nav-oab").textContent = n; $("#nav-oab").classList.toggle("hide", n === 0);
+  } catch (e) {}
+}
+async function carregarOab() {
+  const os = await api("/api/oabs");
+  $("#o-vazio").classList.toggle("hide", os.length > 0);
+  const ST = { ok: ["ok", "Consultada"], pendente: ["mut", "Na fila"], erro: ["err", "Erro — nova tentativa automática"] };
+  $("#o-lista").innerHTML = os.map(o => {
+    const [c, t] = ST[o.status] || ["mut", o.status];
+    return `<tr><td><b>${esc(descFiltro(o.tipo, o.numero, o.uf))}</b>${o.rotulo ? `<br><span class="mut">${esc(o.rotulo)}</span>` : ""}</td>
+      <td><span class="${c}">${t}</span>${o.mensagem ? `<br><span class="${o.status === "erro" ? "err" : "warn"}" style="font-size:13px">${esc(o.mensagem)}</span>` : ""}<br><span class="mut">consultada: ${fmtUtc(o.ultima_consulta)}</span></td>
+      <td>${o.pub_novas ? `<span class="badge">${o.pub_novas} nova(s)</span> ` : ""}<span class="mut">${o.pub_total} guardada(s)</span></td>
+      <td><div class="acoes"><button class="b sm sec" data-oc="${o.id}">Consultar</button><button class="b sm dg" data-od="${o.id}">Remover</button></div></td></tr>`;
+  }).join("");
+  const so = $("#op-novas").checked;
+  const pubs = await api("/api/oab-publicacoes" + (so ? "?novas=1" : ""));
+  $("#op-info").textContent = pubs.length + " publicação(ões)";
+  $("#op-lista").innerHTML = pubs.length ? pubs.map(b => {
+    const advs = lista(b.advogados).map(a => `${esc(a.nome)} (OAB ${esc(a.oab)})`).join("; ");
+    const dest = lista(b.destinatarios).map(d => esc(d.nome) + (d.polo ? " [" + esc(d.polo) + "]" : "")).join("; ");
+    return `<div class="pub ${b.visto ? "" : "n"} ${b.cancelada ? "c" : ""}">
+      <div class="acoes" style="justify-content:space-between"><span><b>${fmt(b.data_disp)}</b> · ${esc(b.tipo_com)}${b.tipo_doc ? " · " + esc(b.tipo_doc) : ""}
+        ${b.visto ? "" : '<span class="badge">nova</span>'} ${b.cancelada ? '<span class="tag">cancelada/inativa</span>' : ""}</span>
+        <span><span class="num">${esc(cnjMask(b.numero_processo))}</span> ${b.cadastrado ? '<span class="mut">(já cadastrado)</span>' : `<button class="b sm sec" data-cad="${esc(b.numero_processo)}">Cadastrar processo</button>`}</span></div>
+      <div class="mut">${esc(b.tribunal)} · ${esc(b.orgao)}${b.classe ? " · " + esc(b.classe) : ""} · via ${esc(descFiltro(b.filtro_tipo, b.oab_numero, b.oab_uf))}</div>
+      ${dest ? `<div class="mut">Destinatários: ${dest}</div>` : ""}${advs ? `<div class="mut">Advogados: ${advs}</div>` : ""}
+      <div class="tx">${esc(b.texto)}</div></div>`;
+  }).join("") : '<div class="card mut">Nenhuma publicação para exibir.</div>';
+}
+$("#op-novas").onchange = carregarOab;
+$("#b-op-vistas").onclick = async () => { try { await api("/api/oab-publicacoes/visto", "POST", {}); carregarOab(); carregarContadorOab(); } catch (e) { aviso(e.message); } };
+$("#b-oab-add").onclick = async () => {
+  try {
+    await api("/api/oabs", "POST", { tipo: $("#o-tipo").value, numero: $("#o-num").value, uf: $("#o-uf").value, rotulo: $("#o-rot").value });
+    $("#o-num").value = ""; $("#o-rot").value = ""; $("#o-res").textContent = "Filtro cadastrado; consulta na fila."; setTimeout(carregarOab, 800);
+  } catch (e) { $("#o-res").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+};
+$("#t-oab").onclick = async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  try {
+    if (b.dataset.oc) { await api(`/api/oabs/${b.dataset.oc}/consultar`, "POST", {}); aviso("OAB colocada na fila de consulta."); }
+    if (b.dataset.od && confirm("Remover este filtro e as publicações guardadas dele?")) { await api(`/api/oabs/${b.dataset.od}`, "DELETE"); carregarOab(); carregarContadorOab(); }
+    if (b.dataset.cad) { const r = await api("/api/processos", "POST", { numeros: cnjMask(b.dataset.cad) });
+      aviso(r.adicionados.length ? "Processo cadastrado; consulta na fila." : (r.repetidos.length ? "Processo já cadastrado." : "Não foi possível cadastrar: " + (r.invalidos[0]?.motivo || "número inválido")));
+      carregarLista(); carregarOab(); }
+  } catch (err) { aviso(err.message); }
+};
+
+// adicionar
+$("#b-add").onclick = async () => {
+  try {
+    const r = await api("/api/processos", "POST", { numeros: $("#a-num").value, apelido: $("#a-apelido").value, cliente: $("#a-cliente").value, pasta: $("#a-pasta").value });
+    $("#a-res").innerHTML = `<span class="ok">Adicionados: ${r.adicionados.length}</span> · Já cadastrados: ${r.repetidos.length} · <span class="${r.invalidos.length ? "err" : ""}">Inválidos: ${r.invalidos.length}</span>` +
+      r.invalidos.map(i => `<br><span class="num">${esc(i.numero)}</span> — ${esc(i.motivo)}`).join("");
+    if (r.adicionados.length) { $("#a-num").value = ""; carregarLista(); }
+  } catch (e) { $("#a-res").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+};
+
+// configurações
+async function carregarConfig() {
+  const c = await api("/api/config");
+  $("#k-key").value = c.api_key; $("#k-dje").checked = c.dje_ativo !== false; $("#k-int").value = c.intervalo_horas;
+  const e = c.email;
+  $("#e-ativo").checked = e.ativo; $("#e-host").value = e.smtp_host; $("#e-porta").value = e.smtp_porta;
+  $("#e-user").value = e.usuario; $("#e-rem").value = e.remetente; $("#e-dest").value = e.destinatario;
+  $("#e-senha").value = ""; $("#e-senha").placeholder = e.senha_definida ? "(senha já definida — deixe vazio para manter)" : "senha de aplicativo";
+}
+$("#b-cfg").onclick = async () => {
+  try {
+    await api("/api/config", "POST", { api_key: $("#k-key").value, dje_ativo: $("#k-dje").checked, intervalo_horas: $("#k-int").value,
+      email: { ativo: $("#e-ativo").checked, smtp_host: $("#e-host").value, smtp_porta: $("#e-porta").value, usuario: $("#e-user").value,
+               senha: $("#e-senha").value, remetente: $("#e-rem").value, destinatario: $("#e-dest").value } });
+    aviso("Configurações salvas."); carregarConfig();
+  } catch (e) { aviso(e.message); }
+};
+$("#b-teste").onclick = async () => { try { await api("/api/email/teste", "POST", {}); aviso("E-mail de teste enviado."); } catch (e) { aviso(e.message); } };
+
+// sobre
+const PEND = '<span class="warn">Pendente de definição</span>';
+async function carregarSobre() {
+  const s = await api("/api/sobre");
+  $("#sobre-info").innerHTML = `<b>${esc(s.nome)}</b> — versão ${esc(s.versao)}<br>
+    <p><b>Copyright:</b> ${s.titular ? "© " + esc(s.ano) + " " + esc(s.titular) : PEND}<br>
+    <b>Licença:</b> ${s.licenca ? esc(s.licenca) : PEND}<br>
+    <b>Contato/suporte:</b> ${s.contato ? esc(s.contato) : PEND}</p>
+    <b>Créditos</b><ul>${(s.creditos || []).map(c => `<li>${esc(c)}</li>`).join("")}</ul>
+    <p class="mut">Termos de uso da API pública do CNJ: <a href="${esc(s.termos_cnj)}" target="_blank" rel="noopener">documento oficial</a> ·
+    <a href="${esc(s.wiki)}" target="_blank" rel="noopener">wiki do DataJud</a></p>`;
+}
+document.querySelectorAll("[data-doc]").forEach(b => b.onclick = async () => {
+  const r = await fetch(b.dataset.doc === "log" ? "/api/log" : "/doc/" + b.dataset.doc); const p = $("#doc");
+  p.textContent = await r.text(); p.classList.remove("hide");
+});
+
+(async () => {
+  try { const s = await api("/api/sobre"); $("#ver").textContent = "v" + s.versao; } catch (e) {}
+  await carregarLista(); await status();
+  setInterval(status, 4000); setInterval(carregarLista, 30000);
+})();
+</script>
+</body>
+</html>
