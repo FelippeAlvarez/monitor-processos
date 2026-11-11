@@ -13,7 +13,8 @@ Programa local (Windows/Linux/macOS, Python 3.9+, apenas biblioteca padrão) que
 ## Uso (resumo)
 1. Instale o Python 3.9+ (marque "Add python.exe to PATH" no Windows).
 2. Execute `iniciar.bat` (ou `python app.py`).
-3. Veja o manual completo em `MANUAL.md` (também na aba **Sobre** do painel).
+3. Para usar pelo celular na mesma rede, execute `iniciar-celular.bat` (ver seção 16 do manual).
+4. Veja o manual completo em `MANUAL.md` (também na aba **Sobre** do painel).
 
 ## Testes
 ```

@@ -61,6 +61,7 @@ class Config:
         d = copy.deepcopy(self.dados)
         d["email"]["senha_definida"] = bool(d["email"].get("senha"))
         d["email"].pop("senha", None)
+        d.pop("codigo_acesso", None)
         return d
 
     def atualizar(self, novo):

@@ -8,7 +8,10 @@ import json
 import logging
 import logging.handlers
 import os
+import hmac
 import re
+import secrets
+import socket
 import sys
 import threading
 import time
@@ -30,7 +33,24 @@ DADOS = Path(os.environ.get("MONITOR_DADOS") or BASE_DIR / "dados")
 DOCS = {"manual": "MANUAL.md", "termos": "TERMOS_DE_USO.md", "privacidade": "PRIVACIDADE.md"}
 HOSTS_LOCAIS = ("127.0.0.1", "localhost")
 
-CTX = SimpleNamespace(banco=None, config=None, monitor=None, sobre={})
+CTX = SimpleNamespace(banco=None, config=None, monitor=None, sobre={}, rede=False, codigo="")
+LOCAIS = ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+PAGINA_RESTRITA = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width,initial-scale=1'>"
+                   "<body style='font:16px system-ui;padding:24px'><h3>Acesso restrito</h3>"
+                   "<p>Abra o endereço completo com <b>?codigo=...</b> mostrado na janela do programa (no computador). "
+                   "Isso só é necessário uma vez neste aparelho.</p></body>")
+
+
+def ip_local():
+    """Endereço do computador na rede local (não envia nenhum pacote)."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("10.255.255.255", 1))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except OSError:
+        return "127.0.0.1"
 
 
 def carregar_sobre():
@@ -301,17 +321,46 @@ class Handler(BaseHTTPRequestHandler):
 
     # segurança: só aceita acesso local (Host/Origin) e JSON nos POST
     def origem_ok(self):
-        host = (self.headers.get("Host") or "").split(":")[0]
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0] if not (self.headers.get("Host") or "").startswith("[") \
+            else (self.headers.get("Host") or "")
+        origem = self.headers.get("Origin")
+        if CTX.rede:  # modo rede: qualquer Host, mas a origem das requisições deve ser a própria página
+            return not origem or urlparse(origem).netloc == (self.headers.get("Host") or "")
         if host not in HOSTS_LOCAIS:
             return False
-        origem = self.headers.get("Origin")
         if origem and urlparse(origem).hostname not in HOSTS_LOCAIS:
             return False
         return True
 
+    def cookie_codigo(self):
+        for parte in (self.headers.get("Cookie") or "").split(";"):
+            k, _, v = parte.strip().partition("=")
+            if k == "acesso":
+                return v
+        return ""
+
+    def autorizado(self):
+        """Fora do modo rede, ou vindo do próprio computador, não há código. Na rede, exige o código de acesso."""
+        if not CTX.rede or self.client_address[0] in LOCAIS:
+            return True
+        return bool(CTX.codigo) and hmac.compare_digest(self.cookie_codigo(), CTX.codigo)
+
     def despachar(self, metodo):
         if not self.origem_ok():
             return self.json({"erro": "Origem não permitida."}, 403)
+        if not self.autorizado():
+            q = parse_qs(urlparse(self.path).query)
+            informado = (q.get("codigo") or [""])[0]
+            if metodo == "GET" and CTX.codigo and hmac.compare_digest(informado, CTX.codigo):
+                self.send_response(302)  # código correto: grava o cookie neste aparelho e vai para o painel
+                self.send_header("Set-Cookie", f"acesso={CTX.codigo}; Max-Age=31536000; Path=/; HttpOnly; SameSite=Strict")
+                self.send_header("Location", "/")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            if urlparse(self.path).path == "/":
+                return self.enviar(PAGINA_RESTRITA.encode("utf-8"), "text/html; charset=utf-8", 401)
+            return self.json({"erro": "Acesso restrito."}, 401)
         if metodo == "POST" and "application/json" not in (self.headers.get("Content-Type") or ""):
             return self.json({"erro": "Content-Type deve ser application/json."}, 415)
         caminho = urlparse(self.path).path
@@ -377,14 +426,27 @@ def iniciar():
     CTX.monitor = Monitor(CTX.banco, CTX.config)
     CTX.sobre = carregar_sobre()
     porta = int(os.environ.get("MONITOR_PORTA") or CTX.config.dados["porta"])
+    CTX.rede = bool(os.environ.get("MONITOR_REDE"))
+    if CTX.rede:
+        if not CTX.config.dados.get("codigo_acesso"):
+            CTX.config.dados["codigo_acesso"] = secrets.token_urlsafe(9)
+            CTX.config.salvar()
+        CTX.codigo = CTX.config.dados["codigo_acesso"]
     try:
-        servidor = ThreadingHTTPServer(("127.0.0.1", porta), Handler)
+        servidor = ThreadingHTTPServer(("0.0.0.0" if CTX.rede else "127.0.0.1", porta), Handler)
     except OSError:
         print(f"A porta {porta} já está em uso. Feche outra instância do Monitor e tente de novo.")
         sys.exit(1)
     threading.Thread(target=agendador, daemon=True).start()
     url = f"http://127.0.0.1:{porta}"
     print(f"Monitor de Processos {CTX.sobre.get('versao', '')} rodando em {url}")
+    if CTX.rede:
+        print()
+        print("MODO REDE ATIVO. No celular (mesmo Wi-Fi do computador), abra uma vez este endereço:")
+        print(f"   http://{ip_local()}:{porta}/?codigo={CTX.codigo}")
+        print("Depois o celular fica autorizado. Não compartilhe o endereço com o código.")
+        print("Se o Windows perguntar sobre o Firewall, permita em 'Redes privadas'.")
+        print()
     print("Para encerrar, feche esta janela ou pressione Ctrl+C.")
     if not os.environ.get("MONITOR_NAO_ABRIR"):
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()

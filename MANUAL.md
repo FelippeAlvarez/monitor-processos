@@ -111,3 +111,12 @@ Para fazer backup, copie essa pasta. Para apagar tudo, feche o programa e apague
   em geral, trazem só o nome da parte. Por isso este filtro pode perder publicações; use como alerta adicional.
 - Para uma parte com muitas ações (ex.: uma cooperativa grande) o volume pode ser alto: use com critério.
 - Os textos podem conter CPF/CNPJ e dados de terceiros: tratamento local, sob sua responsabilidade (LGPD).
+
+16. USAR PELO CELULAR (novo na v0.3.3)
+- Dê dois cliques em iniciar-celular.bat (em vez de iniciar.bat). A janela mostra um endereço do tipo
+  http://192.168.x.x:8765/?codigo=XXXX. Com o celular no MESMO Wi-Fi do computador, abra esse endereço uma vez no navegador do celular:
+  o aparelho fica autorizado e depois basta abrir http://192.168.x.x:8765.
+- O computador precisa estar ligado, com a janela aberta. Se o Windows perguntar sobre o Firewall, permita em "Redes privadas".
+- O código de acesso fica em dados/config.json. Para trocá-lo, apague a linha "codigo_acesso" e reinicie.
+- Fora de casa: instale o Tailscale (gratuito) no computador e no celular; use o endereço 100.x.x.x do computador, sem abrir nada para a internet.
+- Em Wi-Fi público não use o modo rede: o código viaja sem criptografia (HTTP).
