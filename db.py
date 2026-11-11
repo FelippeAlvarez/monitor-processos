@@ -1,5 +1,7 @@
 """Banco SQLite local."""
 import datetime as dt
+import json
+import re
 import sqlite3
 import threading
 
@@ -38,6 +40,8 @@ CREATE TABLE IF NOT EXISTS movimentos(
 
 
 TOLERANCIA_DIAS = 7
+MOTIVOS = ("estrategico", "alto_valor", "tribunal_raro", "sem_oab", "outro")
+TRIAGEM_DIAS = 7   # processo não monitorado e sem OAB identificada: confere no DJEN, no máximo, 1 vez por semana
 BASELINE_PUB_DIAS = 15  # na 1ª consulta do DJEN, publicações dos últimos 15 dias contam como novas (prazo pode estar correndo)
 
 SCHEMA_PUB = """
@@ -149,6 +153,7 @@ def _data(texto):
 class Banco:
     def __init__(self, caminho):
         self.lock = threading.RLock()
+        self.politica_fn = None  # função que devolve {"auto_sem_oab": bool, "auto_dias": int} (a configuração)
         self.conn = sqlite3.connect(str(caminho), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
@@ -168,6 +173,13 @@ class Banco:
                           ("dje_mensagem", "TEXT DEFAULT ''"), ("dje_baseline", "INTEGER NOT NULL DEFAULT 0")):
             if nome not in colunas:
                 self.conn.execute(f"ALTER TABLE processos ADD COLUMN {nome} {ddl}")
+        # v0.5.2: monitoramento por processo. Quem já estava cadastrado continua monitorado (DEFAULT 1).
+        for nome, ddl in (("monitorar", "INTEGER NOT NULL DEFAULT 1"), ("motivo", "TEXT DEFAULT ''"),
+                          ("motivo_obs", "TEXT DEFAULT ''"), ("monitorar_origem", "TEXT DEFAULT ''"),
+                          ("oab_status", "TEXT DEFAULT ''"), ("oab_data", "TEXT DEFAULT ''"),
+                          ("aviso", "TEXT DEFAULT ''"), ("aviso_em", "TEXT")):
+            if nome not in colunas:
+                self.conn.execute(f"ALTER TABLE processos ADD COLUMN {nome} {ddl}")
         cols_oab = {r["name"] for r in self.conn.execute("PRAGMA table_info(oabs)").fetchall()}
         if "tipo" not in cols_oab:
             self.conn.execute("ALTER TABLE oabs ADD COLUMN tipo TEXT NOT NULL DEFAULT 'oab'")
@@ -180,13 +192,18 @@ class Banco:
         with self.lock:
             return [dict(r) for r in self.conn.execute(sql, args).fetchall()]
 
-    def adicionar(self, numero, limpo, alias, apelido="", cliente="", pasta=""):
-        """Retorna o id, ou None se o processo já estiver cadastrado."""
+    def adicionar(self, numero, limpo, alias, apelido="", cliente="", pasta="", monitorar=True, motivo="", motivo_obs=""):
+        """Retorna o id, ou None se o processo já estiver cadastrado.
+        monitorar=True: entra na consulta diária (cadastro manual). False: fica só no cadastro (importação, descobertos)."""
+        motivo = motivo if motivo in MOTIVOS else ""
         with self.lock:
             try:
                 cur = self.conn.execute(
-                    "INSERT INTO processos(numero,numero_limpo,alias,apelido,cliente,pasta,criado_em)"
-                    " VALUES(?,?,?,?,?,?,?)", (numero, limpo, alias, apelido, cliente, pasta, agora()))
+                    "INSERT INTO processos(numero,numero_limpo,alias,apelido,cliente,pasta,criado_em,monitorar,motivo,"
+                    "motivo_obs,monitorar_origem) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+                    (numero, limpo, alias, apelido, cliente, pasta, agora(), 1 if monitorar else 0,
+                     motivo if monitorar else "", str(motivo_obs or "")[:120] if monitorar else "",
+                     "manual" if monitorar else ""))
                 self.conn.commit()
                 return cur.lastrowid
             except sqlite3.IntegrityError:
@@ -201,8 +218,9 @@ class Banco:
         linhas = self._linhas("SELECT * FROM processos WHERE id=?", (pid,))
         return linhas[0] if linhas else None
 
-    def ativos(self, ids=None):
-        linhas = self._linhas("SELECT * FROM processos WHERE ativo=1 ORDER BY id")
+    def ativos(self, ids=None, so_monitorados=False):
+        linhas = self._linhas("SELECT * FROM processos WHERE ativo=1" + (" AND monitorar=1" if so_monitorados else "")
+                              + " ORDER BY id")
         if ids is not None:
             linhas = [p for p in linhas if p["id"] in ids]
         return linhas
@@ -380,17 +398,27 @@ class Banco:
                 self.conn.execute("UPDATE oabs SET desde=? WHERE id=? AND desde<?", (novo, oid, novo))
             self.conn.commit()
 
-    def registrar_oab_pubs(self, oid, itens):
-        """Grava as publicações da OAB. Devolve as NOVAS (para alerta).
+    def registrar_oab_pubs(self, oid, itens, cadastradas_novas=None):
+        """Grava as publicações da OAB. Devolve as NOVAS de processos NÃO cadastrados (para alerta).
 
-        Ignora processos que já estão cadastrados (as publicações deles são tratadas na consulta por
-        processo) e comunicações repetidas (mesmo processo, data e texto, para destinatários diferentes)."""
+        Processo cadastrado e monitorado: a publicação é tratada na consulta por processo (aqui só se registra que a OAB
+        apareceu nele). Processo cadastrado mas NÃO monitorado: a publicação entra no próprio processo e, se for nova, é
+        acrescentada em `cadastradas_novas` como (processo, item) — é assim que ele é acompanhado sem consulta diária.
+        Comunicações repetidas (mesmo processo, data e texto, para destinatários diferentes) não alertam de novo."""
         novas = []
         with self.lock:
-            cadastrados = {r["numero_limpo"] for r in self.conn.execute("SELECT numero_limpo FROM processos WHERE ativo=1")}
+            cadastrados = {r["numero_limpo"]: dict(r) for r in self.conn.execute(
+                "SELECT id, numero, apelido, cliente, numero_limpo, monitorar FROM processos WHERE ativo=1")}
+            proprias = self.oabs_proprias()
             vistos_lote = set()
             for it in itens:
-                if it["numero"] in cadastrados:
+                reg = cadastrados.get(it["numero"])
+                if reg:
+                    if proprias and _cita_oab(it.get("advogados"), proprias):
+                        self._aplicar_oab(reg["id"], "com", it["data_disp"])
+                    if not reg["monitorar"] and self._inserir_pub_processo(reg["id"], it) and not it["cancelada"]:
+                        if cadastradas_novas is not None:
+                            cadastradas_novas.append((reg, it))
                     continue
                 if self.conn.execute("SELECT 1 FROM oab_pubs WHERE oab_id=? AND pub_id=?",
                                      (oid, it["pub_id"])).fetchone():
@@ -413,6 +441,16 @@ class Banco:
                     novas.append(it)
             self.conn.commit()
         return novas
+
+    def _inserir_pub_processo(self, pid, it):
+        """Grava a publicação (vinda do filtro de OAB) no próprio processo. Não mexe na 'linha de base' do DJEN do processo.
+        Devolve True se era inédita."""
+        cur = self.conn.execute(
+            "INSERT OR IGNORE INTO publicacoes(processo_id,pub_id,data_disp,tipo_com,orgao,tipo_doc,classe,texto,meio,hash,"
+            "destinatarios,advogados,cancelada,visto,detectado_em) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
+            (pid, it["pub_id"], it["data_disp"], it["tipo_com"], it["orgao"], it["tipo_doc"], it["classe"], it["texto"],
+             it["meio"], it.get("hash", ""), it["destinatarios"], it.get("advogados", "[]"), it["cancelada"], agora()))
+        return cur.rowcount > 0
 
     def oab_publicacoes(self, oid=None, so_novas=False, limite=300):
         sql = ("SELECT b.*, o.numero AS oab_numero, o.uf AS oab_uf, o.tipo AS filtro_tipo, o.rotulo AS oab_rotulo, "
@@ -473,11 +511,11 @@ class Banco:
     def candidatos_varredura(self, inicio_dia_utc):
         """Processos ativos ainda não consultados hoje: nunca consultados primeiro, depois os de consulta mais antiga."""
         return self._linhas(
-            "SELECT id, ultima_consulta, status FROM processos WHERE ativo=1 AND COALESCE(ultima_consulta,'')<? "
+            "SELECT id, ultima_consulta, status FROM processos WHERE ativo=1 AND monitorar=1 AND COALESCE(ultima_consulta,'')<? "
             "ORDER BY COALESCE(ultima_consulta,'') , id", (inicio_dia_utc,))
 
     def consultados_desde(self, inicio_dia_utc):
-        return self._linhas("SELECT COUNT(*) AS n FROM processos WHERE ativo=1 AND COALESCE(ultima_consulta,'')>=?",
+        return self._linhas("SELECT COUNT(*) AS n FROM processos WHERE ativo=1 AND monitorar=1 AND COALESCE(ultima_consulta,'')>=?",
                             (inicio_dia_utc,))[0]["n"]
 
     def registrar_descoberta_status(self, oid, status, mensagem="", desde="", truncado=False, ignorados=0):
@@ -510,3 +548,136 @@ class Banco:
     def listar_basico(self):
         """Só id/numero/numero_limpo/ativo (rápido; sem as contagens da listagem completa)."""
         return self._linhas("SELECT id, numero, numero_limpo, ativo FROM processos")
+
+    # ------------------------------------------------------------ v0.5.2: monitoramento por processo e OAB automática
+    def definir_monitorar(self, ids, monitorar, motivo="", obs=""):
+        """Liga/desliga o monitoramento diário (ação do usuário). Fica registrado como 'manual': a automação não desfaz."""
+        ids = [int(i) for i in ids]
+        if not ids:
+            return 0
+        motivo = motivo if motivo in MOTIVOS else ""
+        with self.lock:
+            n = 0
+            for i in range(0, len(ids), 500):
+                lote = ids[i:i + 500]
+                cur = self.conn.execute(
+                    f"UPDATE processos SET monitorar=?, motivo=?, motivo_obs=?, monitorar_origem='manual', aviso='', aviso_em=NULL "
+                    f"WHERE id IN ({','.join('?' * len(lote))})",
+                    [1 if monitorar else 0, motivo if monitorar else "", str(obs or "")[:120] if monitorar else "", *lote])
+                n += cur.rowcount
+            self.conn.commit()
+        return n
+
+    def dispensar_avisos(self, ids):
+        ids = [int(i) for i in ids]
+        if not ids:
+            return 0
+        with self.lock:
+            cur = self.conn.execute(f"UPDATE processos SET aviso='', aviso_em=NULL WHERE id IN ({','.join('?' * len(ids))})", ids)
+            self.conn.commit()
+            return cur.rowcount
+
+    def _politica(self):
+        pol = {"auto_sem_oab": True, "auto_dias": 180}
+        try:
+            pol.update(self.politica_fn() or {} if self.politica_fn else {})
+        except Exception:  # noqa: BLE001
+            pass
+        return pol
+
+    def oabs_proprias(self):
+        """OABs cadastradas como filtro (tipo 'oab'): conjunto de (número só com dígitos, UF)."""
+        res = set()
+        for o in self.conn.execute("SELECT numero, uf FROM oabs WHERE tipo='oab'"):
+            d = re.sub(r"\D", "", o["numero"]).lstrip("0")
+            if d:
+                res.add((d, str(o["uf"]).upper()))
+        return res
+
+    def avaliar_oab(self, pid):
+        """Confere, nas publicações já gravadas do processo, se alguma cita uma das OABs cadastradas.
+        'com' = a OAB aparece; 'sem' = há publicações e nenhuma cita a OAB; '' = nenhuma publicação ainda.
+        Aplica a política automática (ver _aplicar_oab). Não faz nada se não houver OAB cadastrada como filtro."""
+        with self.lock:
+            proprias = self.oabs_proprias()
+            p = self.obter(pid)
+            if not proprias or not p:
+                return
+            rows = self.conn.execute("SELECT data_disp, advogados FROM publicacoes WHERE processo_id=? AND cancelada=0",
+                                     (pid,)).fetchall()
+            if not rows:
+                return
+            datas = [r["data_disp"] for r in rows if _cita_oab(r["advogados"], proprias)]
+            if datas:
+                self._aplicar_oab(pid, "com", max(datas))
+            elif p["oab_status"] != "com":
+                self._aplicar_oab(pid, "sem", "")
+            self.conn.commit()
+
+    def _aplicar_oab(self, pid, novo, data):
+        """Grava a situação da OAB no processo e aplica a política:
+        - 'sem' + publicação recente + não monitorado + sem decisão manual -> entra no monitoramento (motivo 'sem_oab', origem 'auto');
+        - 'com' num processo monitorado por 'sem_oab': se a entrada foi automática, sai do monitoramento (com aviso);
+          se foi decisão manual, só aparece o aviso. Em ambos o aviso fica no painel até ser dispensado."""
+        p = self.obter(pid)
+        if not p:
+            return
+        antigo = p["oab_status"] or ""
+        data_ant = p["oab_data"] or ""
+        if novo == "com":
+            data = max(data or "", data_ant)
+        if not (novo == antigo and (novo != "com" or data == data_ant)):
+            self.conn.execute("UPDATE processos SET oab_status=?, oab_data=? WHERE id=?", (novo, data if novo == "com" else "", pid))
+        pol = self._politica()
+        if novo == "com" and antigo != "com" and p["monitorar"] and p["motivo"] == "sem_oab":
+            quando = _br(data)
+            if p["monitorar_origem"] == "auto" and pol.get("auto_sem_oab", True):
+                self.conn.execute("UPDATE processos SET monitorar=0, aviso=?, aviso_em=? WHERE id=?",
+                                  (f"Saiu do monitoramento diário: a OAB apareceu em publicação de {quando}. "
+                                   "As publicações passam a chegar pelo filtro de OAB (movimentos do DataJud deixam de ser acompanhados).",
+                                   agora(), pid))
+            else:
+                self.conn.execute("UPDATE processos SET aviso=?, aviso_em=? WHERE id=?",
+                                  (f"A OAB apareceu em publicação de {quando}. Este processo foi marcado como “sem OAB”: "
+                                   "considere parar de monitorá-lo diariamente.", agora(), pid))
+        elif novo == "sem" and pol.get("auto_sem_oab", True) and p["ativo"] and not p["monitorar"] and p["monitorar_origem"] != "manual":
+            ult = self.conn.execute("SELECT MAX(data_disp) AS d FROM publicacoes WHERE processo_id=? AND cancelada=0",
+                                    (pid,)).fetchone()["d"]
+            d = _data(ult)
+            if d and (dt.date.today() - d).days <= int(pol.get("auto_dias", 180)):
+                self.conn.execute(
+                    "UPDATE processos SET monitorar=1, motivo='sem_oab', monitorar_origem='auto', aviso=?, aviso_em=? WHERE id=?",
+                    (f"Entrou no monitoramento diário: há publicação recente ({_br(ult)}) e nenhuma cita a OAB cadastrada. "
+                     "Se você não quiser acompanhar este processo, desmarque “monitorar”.", agora(), pid))
+
+    def candidatos_triagem(self, corte_utc):
+        """Processos ativos, NÃO monitorados e sem OAB identificada, cuja última conferência no DJEN é anterior ao corte
+        (nunca conferidos primeiro). A conferência é só no DJEN (rápida) e serve para descobrir se a OAB aparece e se
+        há atividade recente."""
+        return self._linhas(
+            "SELECT id, dje_consulta FROM processos WHERE ativo=1 AND monitorar=0 AND COALESCE(oab_status,'')<>'com' "
+            "AND COALESCE(dje_consulta,'')<? ORDER BY COALESCE(dje_consulta,''), id", (corte_utc,))
+
+    def total_monitorados(self):
+        return self._linhas("SELECT COUNT(*) AS n FROM processos WHERE ativo=1 AND monitorar=1")[0]["n"]
+
+    def total_avisos(self):
+        return self._linhas("SELECT COUNT(*) AS n FROM processos WHERE COALESCE(aviso,'')<>''")[0]["n"]
+
+
+def _br(data):
+    d = str(data or "")[:10]
+    return f"{d[8:10]}/{d[5:7]}/{d[0:4]}" if len(d) == 10 else d
+
+
+def _cita_oab(advogados_json, proprias):
+    """True se a lista de advogados da publicação (JSON) inclui alguma das OABs (número só com dígitos + UF)."""
+    try:
+        lista = json.loads(advogados_json or "[]")
+    except (TypeError, ValueError):
+        return False
+    for a in lista if isinstance(lista, list) else []:
+        num, _, uf = str((a or {}).get("oab", "")).partition("/")
+        if (re.sub(r"\D", "", num).lstrip("0"), uf.strip().upper()) in proprias:
+            return True
+    return False

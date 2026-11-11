@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, urlparse
 import auth
 import backup
 import datajud
+import db
 import dje
 import importacao
 import mailer
@@ -100,10 +101,11 @@ def r_status(h):
     m = CTX.monitor
     intervalo = CTX.config.dados["intervalo_horas"]
     proximo = (m.ultimo_ciclo + intervalo * 3600) if (m.ultimo_ciclo and intervalo) else None
-    ativos = CTX.banco.ativos()
+    ativos = CTX.banco.ativos(so_monitorados=True)
     pausado = m.pausado_ate if m.pausado_ate > time.time() else None
     h.json({"rodando": m.rodando, "progresso": m.progresso, "resumo": m.resumo, "fila": len(m.fila),
             "pendentes": sum(1 for p in ativos if p["status"] in ("pendente", "erro")),
+            "monitorados": len(ativos), "avisos": CTX.banco.total_avisos(),
             "pub_novas": CTX.banco.total_pub_novas(), "varredura": m.resumo_varredura(),
             "oab_novas": sum(o["pub_novas"] for o in CTX.banco.oabs()),
             "oab_resumo": m.resumo_oab,
@@ -208,12 +210,31 @@ def _disparar(ids=None):
     return CTX.monitor.solicitar(ids, forcar=True)
 
 
+def _motivo(c):
+    """(motivo, observação) vindos da interface; motivo desconhecido vira vazio."""
+    m = str(c.get("motivo") or "")
+    return (m if m in db.MOTIVOS else ""), str(c.get("motivo_obs") or "").strip()[:120]
+
+
+def _disparar_novos(ids, monitorar):
+    """Processos recém-cadastrados: monitorados são consultados já (DataJud + DJEN); os demais só têm a OAB conferida no DJEN
+    (rápido). Lotes grandes esperam a varredura em blocos (evita estourar o limite das APIs)."""
+    if not ids or (len(ids) > 20 and CTX.monitor.varredura_ativa()):
+        return
+    if monitorar:
+        _disparar(set(ids))
+    else:
+        CTX.monitor.solicitar_dje(set(ids))
+
+
 def r_adicionar(h):
     corpo = h.corpo()
     texto = str(corpo.get("numeros") or "")
     apelido = str(corpo.get("apelido") or "").strip()[:120]
     cliente = str(corpo.get("cliente") or "").strip()[:120]
     pasta = str(corpo.get("pasta") or "").strip()[:60]
+    monitorar = bool(corpo.get("monitorar", True))
+    motivo, motivo_obs = _motivo(corpo)
     numeros = datajud.RE_CNJ_BUSCA.findall(texto)
     if not numeros:
         return h.json({"erro": "Nenhum número CNJ encontrado no texto."}, 400)
@@ -228,14 +249,14 @@ def r_adicionar(h):
         except (datajud.ErroNumero, datajud.TribunalNaoSuportado) as e:
             res["invalidos"].append({"numero": n, "motivo": str(e)})
             continue
-        pid = CTX.banco.adicionar(info["numero"], info["limpo"], alias, apelido, cliente, pasta)
+        pid = CTX.banco.adicionar(info["numero"], info["limpo"], alias, apelido, cliente, pasta, monitorar, motivo, motivo_obs)
         if pid is None:
             res["repetidos"].append(info["numero"])
         else:
             res["adicionados"].append(info["numero"])
             novos_ids.append(pid)
-    if novos_ids and not (len(novos_ids) > 20 and CTX.monitor.varredura_ativa()):
-        _disparar(set(novos_ids))  # lotes grandes esperam a varredura em blocos (evita estourar o limite da API)
+    _disparar_novos(novos_ids, monitorar)
+    res["monitorar"] = monitorar
     res["em_varredura"] = bool(novos_ids) and len(novos_ids) > 20 and CTX.monitor.varredura_ativa()
     if res["adicionados"]:
         h.auditar("processo_adicionado", f"{len(res['adicionados'])} processo(s): " + ", ".join(res["adicionados"][:5])
@@ -443,6 +464,31 @@ def r_proc_ativo(h):
     h.json({"ok": True, "alterados": n})
 
 
+def r_proc_monitorar(h):
+    """Liga/desliga o monitoramento diário de processos (um ou vários), com o motivo."""
+    c = h.corpo()
+    ids = c.get("ids")
+    if not isinstance(ids, list) or not ids or len(ids) > 5000:
+        return h.json({"erro": "Informe a lista de processos (até 5000)."}, 400)
+    monitorar = bool(c.get("monitorar"))
+    motivo, obs = _motivo(c)
+    ids = [int(i) for i in ids]
+    n = CTX.banco.definir_monitorar(ids, monitorar, motivo, obs)
+    if monitorar and len(ids) <= 20:
+        _disparar(set(ids))   # poucos: consulta já; muitos: a varredura em blocos cuida
+    h.auditar("monitoramento_ligado" if monitorar else "monitoramento_desligado",
+              f"{n} processo(s)" + (f" — motivo: {motivo}" if monitorar and motivo else ""))
+    h.json({"ok": True, "alterados": n})
+
+
+def r_avisos_dispensar(h):
+    c = h.corpo()
+    ids = c.get("ids")
+    if not isinstance(ids, list) or not ids or len(ids) > 5000:
+        return h.json({"erro": "Informe a lista de processos (até 5000)."}, 400)
+    h.json({"ok": True, "dispensados": CTX.banco.dispensar_avisos([int(i) for i in ids])})
+
+
 def r_proc_inativos(h):
     """Arquiva (ou só simula) os processos sem movimentação nem publicação há mais de N meses."""
     c = h.corpo()
@@ -468,6 +514,8 @@ def r_importar(h):
         r = importacao.analisar(dados)
     except importacao.ErroImportacao as e:
         return h.json({"erro": str(e)}, 400)
+    monitorar = bool(c.get("monitorar", False))   # importação: por padrão só cadastra; quem monitora é escolha sua
+    motivo, motivo_obs = _motivo(c)
     existentes = {p["numero_limpo"] for p in CTX.banco.listar_basico()}
     novos = [v for v in r["validos"] if v["limpo"] not in existentes]
     res = {"encontrados": len(r["validos"]), "novos": len(novos), "repetidos": len(r["validos"]) - len(novos),
@@ -476,12 +524,17 @@ def r_importar(h):
     if c.get("simular", True):
         res["simulado"] = True
         return h.json(res)
+    novos_ids = []
     for v in novos:
-        CTX.banco.adicionar(v["numero"], v["limpo"], v["alias"], v["apelido"], v["cliente"], v["pasta"])
+        pid = CTX.banco.adicionar(v["numero"], v["limpo"], v["alias"], v["apelido"], v["cliente"], v["pasta"],
+                                  monitorar, motivo, motivo_obs)
+        if pid:
+            novos_ids.append(pid)
     res["adicionados"] = len(novos)
+    res["monitorar"] = monitorar
     res["em_varredura"] = bool(novos) and CTX.monitor.varredura_ativa()
-    if novos and not CTX.monitor.varredura_ativa():
-        _disparar({p["id"] for p in CTX.banco.ativos() if p["numero_limpo"] in {v["limpo"] for v in novos}})
+    if novos_ids and not CTX.monitor.varredura_ativa():
+        _disparar_novos(novos_ids, monitorar)
     h.auditar("processos_importados", f"{len(novos)} novo(s) de {str(c.get('nome') or '')[:60]}")
     h.json(res)
 
@@ -524,6 +577,8 @@ ROTAS = [
     ("GET", r"/api/oabs/(\d+)/descobertos", r_oab_descobertos, "usu"),
     ("POST", r"/api/processos/ativo", r_proc_ativo, "usu"),
     ("POST", r"/api/processos/inativos", r_proc_inativos, "usu"),
+    ("POST", r"/api/processos/monitorar", r_proc_monitorar, "usu"),
+    ("POST", r"/api/processos/avisos/dispensar", r_avisos_dispensar, "usu"),
     ("POST", r"/api/importar", r_importar, "usu"),
     ("GET", r"/api/oab-publicacoes", r_oab_pubs, "usu"),
     ("POST", r"/api/oab-publicacoes/visto", r_oab_visto, "usu"),

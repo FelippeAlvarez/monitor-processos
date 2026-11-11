@@ -15,7 +15,7 @@ import time
 import datajud
 import dje
 import mailer
-from db import inicio_do_dia_utc
+from db import TRIAGEM_DIAS, inicio_do_dia_utc
 
 log = logging.getLogger("monitor")
 
@@ -32,8 +32,10 @@ class LimiteExcedido(Exception):
 
 class Monitor:
     def __init__(self, banco, config, pausa_entre_consultas=3.0, tamanho_lote=10,
-                 espera_429=(30, 90, 180), pausa_limite=900, espera_parcial=(15, 45)):
+                 espera_429=(30, 90, 180), pausa_limite=900, espera_parcial=(20, 60, 180)):
         self.espera_parcial = espera_parcial
+        self._penal = {"datajud": 0.0, "dje": 0.0}   # segundos extras entre requisições após 429/resposta parcial (decai com os acertos)
+        self._dur = {"datajud": 0.0, "dje": 0.0}     # duração da última requisição bem-sucedida
         self.banco = banco
         self.config = config
         self.pausa = pausa_entre_consultas
@@ -63,14 +65,16 @@ class Monitor:
         self.proxima_dje = {}
         self.tentativas_dje = {}
         self._dormir = time.sleep  # substituível em testes
+        self.banco.politica_fn = lambda: self.config.dados.get("monitoramento")
 
     def _ha_trabalho(self):
         return bool(self.fila or self.fila_dje or self.fila_oab or self.fila_desc)
 
     # ------------------------------------------------------------------ fila
     def solicitar(self, ids=None, forcar=False):
-        """Põe processos na fila (todos os ativos se ids=None) e garante que o trabalhador rode."""
-        alvo = {p["id"] for p in self.banco.ativos(ids)}
+        """Põe processos na fila e garante que o trabalhador rode. Sem ids: todos os MONITORADOS (quem foi pedido
+        explicitamente, como no botão “Atualizar” de um processo, é consultado mesmo sem estar monitorado)."""
+        alvo = {p["id"] for p in self.banco.ativos(ids, so_monitorados=ids is None)}
         with self._lock:
             if forcar:
                 self.pausado_ate = 0.0
@@ -150,6 +154,12 @@ class Monitor:
         return [p["id"] for p in self.banco.candidatos_varredura(inicio_do_dia_utc(agora))
                 if self.proxima.get(p["id"], 0) <= t]
 
+    def candidatos_triagem(self):
+        """Ids de processos NÃO monitorados a conferir no DJEN (descobrir se a OAB aparece / se há atividade recente)."""
+        corte = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=TRIAGEM_DIAS)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        t = time.time()
+        return [p["id"] for p in self.banco.candidatos_triagem(corte) if self.proxima_dje.get(p["id"], 0) <= t]
+
     def iniciar_bloco_se_devido(self, agora=None):
         """Chamado pelo agendador. Enfileira o próximo bloco da varredura diária, se estiver na janela de horário, se já
         passou o intervalo desde o último bloco e se há processos não consultados hoje. Devolve quantos foram enfileirados."""
@@ -158,16 +168,22 @@ class Monitor:
         v = self._cfg_varredura()
         if time.time() < self.pausado_ate or time.time() - self.ultimo_bloco < int(v.get("intervalo_min", 30)) * 60:
             return 0
-        ids = self.candidatos_hoje(agora)[:int(v.get("bloco", 100))]
-        if not ids:
+        tam = int(v.get("bloco", 100))
+        ids = self.candidatos_hoje(agora)[:tam]
+        # além dos monitorados (DataJud + DJEN), confere no DJEN — que é rápido — os não monitorados ainda sem OAB identificada
+        tri = self.candidatos_triagem()[:tam] if self.config.dados.get("dje_ativo", True) and time.time() >= self.dje_pausado_ate else []
+        if not ids and not tri:
             return 0
         self.ultimo_bloco = time.time()
-        log.info("Varredura diária: bloco de %d processo(s)", len(ids))
-        return self.solicitar(set(ids))
+        log.info("Varredura diária: bloco de %d monitorado(s) e %d conferência(s) de OAB (DJEN)", len(ids), len(tri))
+        n = self.solicitar(set(ids)) if ids else 0
+        if tri:
+            n += self.solicitar_dje(set(tri))
+        return n
 
     def resumo_varredura(self, agora=None):
         v = self._cfg_varredura()
-        ativos = len(self.banco.ativos())
+        ativos = self.banco.total_monitorados()
         feitos = self.banco.consultados_desde(inicio_do_dia_utc(agora))
         intervalo = int(v.get("intervalo_min", 30)) or 30
         tam = max(1, int(v.get("bloco", 100)))
@@ -176,7 +192,7 @@ class Monitor:
         return {"ativa": self.varredura_ativa(), "ativos": ativos, "feitos_hoje": feitos,
                 "restantes": max(0, ativos - feitos), "bloco": int(v.get("bloco", 100)), "intervalo_min": intervalo,
                 "inicio": v.get("inicio"), "na_janela": self.na_janela(agora),
-                "previsao_min": previsao_min,
+                "previsao_min": previsao_min, "triagem_restantes": len(self.candidatos_triagem()),
                 "proximo_bloco": (self.ultimo_bloco + intervalo * 60) if self.ultimo_bloco else None}
 
     def agendar_pendentes(self):
@@ -186,7 +202,7 @@ class Monitor:
             return 0
         n = 0
         if agora >= self.pausado_ate:
-            ids = {p["id"] for p in self.banco.ativos()
+            ids = {p["id"] for p in self.banco.ativos(so_monitorados=True)
                    if p["status"] in ("pendente", "erro") and self.proxima.get(p["id"], 0) <= agora
                    and (p["status"] == "erro" or p["id"] in self.proxima or not self.varredura_ativa())}
             if ids:
@@ -235,7 +251,7 @@ class Monitor:
     # ----------------------------------------------------------------- ciclo
     def executar(self, ids=None, usar_datajud=True, usar_dje=True):
         """Consulta os processos indicados (todos os ativos se None). Devolve o resumo do ciclo."""
-        processos = self.banco.ativos(ids)
+        processos = self.banco.ativos(ids, so_monitorados=ids is None)
         total = len(processos) if usar_datajud else 0
         ctx = {"feitos": 0, "total": total, "novos": [], "erros": 0, "interrompido": None, "feitos_ids": set(),
                "pubs": [], "dje_erros": 0, "dje_feitos": 0, "dje_aviso": ""}
@@ -310,6 +326,7 @@ class Monitor:
             return resumo
         base = self.config.dados.get("dje_base_url", dje.BASE_URL)
         novas_por_oab = []
+        cadastradas = []  # (processo, publicação) de processos cadastrados mas NÃO monitorados diariamente
         try:
             for i, o in enumerate(oabs, 1):
                 if time.time() < self.dje_pausado_ate:
@@ -335,7 +352,7 @@ class Monitor:
                     log.exception("Erro inesperado na consulta por OAB")
                     self._falha_oab(o, f"Erro inesperado: {e}", resumo)
                     continue
-                novas = self.banco.registrar_oab_pubs(o["id"], itens)
+                novas = self.banco.registrar_oab_pubs(o["id"], itens, cadastradas)
                 aviso = ("Atenção: não foi possível carregar todas as publicações do período (limite da API); "
                          "pode haver outras. Confira no portal do DJEN." if truncado else "")
                 # só avança a janela quando a carga foi completa; se truncou, a próxima consulta repete o período
@@ -347,12 +364,22 @@ class Monitor:
                     novas_por_oab.append((o, novas))
         finally:
             self.progresso = ""
-        resumo["novas"] = sum(len(n) for _, n in novas_por_oab)
+        por_proc = {}
+        for reg, it in cadastradas:
+            por_proc.setdefault(reg["id"], (reg, []))[1].append(it)
+        pubs_cadastradas = list(por_proc.values())
+        resumo["novas"] = sum(len(n) for _, n in novas_por_oab) + len(cadastradas)
         cfg_email = self.config.dados["email"]
-        if cfg_email.get("ativo") and novas_por_oab:
+        if cfg_email.get("ativo") and (novas_por_oab or pubs_cadastradas):
             try:
+                corpo = []
+                if novas_por_oab:
+                    corpo.append(self.montar_email_oab(novas_por_oab))
+                if pubs_cadastradas:
+                    corpo.append("PROCESSOS CADASTRADOS (sem consulta diária): publicações novas encontradas pelo filtro de OAB\n\n"
+                                 + self.montar_email([], pubs_cadastradas))
                 mailer.enviar(cfg_email, f"[Monitor de Processos] {resumo['novas']} publicação(ões) nova(s) nos filtros de pesquisa",
-                              self.montar_email_oab(novas_por_oab))
+                              "\n\n".join(corpo))
                 resumo["email"] = "enviado"
             except Exception as e:  # noqa: BLE001
                 resumo["email"] = f"falhou: {e}"
@@ -474,6 +501,7 @@ class Monitor:
                 self._falha_dje(p, f"Erro inesperado: {e}", ctx)
                 continue
             novas = self.banco.registrar_publicacoes(p["id"], itens)
+            self.banco.avaliar_oab(p["id"])  # a OAB aparece nas publicações? (entra/sai do monitoramento conforme a política)
             self.banco.registrar_dje_status(p["id"], "ok", "")
             self.tentativas_dje.pop(p["id"], None)
             self.proxima_dje.pop(p["id"], None)
@@ -500,8 +528,7 @@ class Monitor:
                     res = self._com_espera(
                         f"lote {alias} x{len(bloco)}",
                         lambda: datajud.consultar_lote([p["numero_limpo"] for p in bloco], alias,
-                                                       d["api_key"], d["base_url"]),
-                        repetir_parcial=False)  # resposta parcial: vai direto para consultas individuais
+                                                       d["api_key"], d["base_url"]))
                     individuais = []
                     for p in bloco:
                         dados = res.get(p["numero_limpo"])
@@ -512,9 +539,14 @@ class Monitor:
                 except datajud.LoteIncompleto as e:
                     log.info("Lote %s não utilizável (%s); consultando um a um", alias, e)
                 except datajud.ErroAPI as e:
-                    if e.codigo not in (400, "parcial"):
+                    if e.codigo == "parcial":
+                        # base do CNJ sobrecarregada: consultar um a um só aumentaria a carga (e levou a 429 em série).
+                        # Interrompe o ciclo, deixa o bloco pendente e tenta de novo mais tarde.
+                        raise LimiteExcedido("A base do CNJ está sobrecarregada (respostas parciais seguidas); "
+                                             "nova tentativa automática mais tarde.")
+                    if e.codigo != 400:
                         raise
-                    log.info("Lote %s recusado/parcial (%s); consultando um a um", alias, e.codigo)
+                    log.info("Lote %s recusado (%s); consultando um a um", alias, e.codigo)
             for p in individuais:
                 if ctx["interrompido"]:
                     return
@@ -525,8 +557,14 @@ class Monitor:
                 except datajud.ErroAPI as e:
                     if e.codigo in (401, 403):
                         raise
+                    if e.codigo == "parcial":
+                        ctx["parciais"] = ctx.get("parciais", 0) + 1
+                        if ctx["parciais"] >= 3:   # 3 seguidas: a base está sobrecarregada, não adianta insistir
+                            raise LimiteExcedido("A base do CNJ está sobrecarregada (respostas parciais seguidas); "
+                                                 "nova tentativa automática mais tarde.")
                     self._falha(p, str(e), ctx)
                     continue
+                ctx["parciais"] = 0
                 self._registrar(p, dados, ctx)
         except LimiteExcedido as e:
             self.pausado_ate = time.time() + self.pausa_limite
@@ -593,10 +631,15 @@ class Monitor:
             t0 = time.time()
             try:
                 r = fn()
-                log.info("%s: ok em %.1fs", rotulo, time.time() - t0)
+                dur = time.time() - t0
+                log.info("%s: ok em %.1fs", rotulo, dur)
+                self._dur[canal] = dur
+                self._penal[canal] = self._penal[canal] / 2 if self._penal[canal] >= 2 else 0.0  # acertos reduzem a pausa extra
                 return r
             except datajud.ErroAPI as e:
                 log.warning("%s: %s (HTTP %s) em %.1fs", rotulo, e, e.codigo, time.time() - t0)
+                if e.codigo in ("parcial", 429):  # sinal de sobrecarga: aumenta a pausa entre as próximas requisições
+                    self._penal[canal] = min(max(self._penal[canal] * 2, 15.0), 180.0)
                 if e.codigo == "parcial" and repetir_parcial and parciais < len(self.espera_parcial):
                     espera = self.espera_parcial[parciais]
                     parciais += 1
@@ -622,7 +665,9 @@ class Monitor:
     def _respeitar_ritmo(self, canal="datajud"):
         ultima = self._ultima_req_dje if canal == "dje" else self._ultima_req
         pausa_ate = self.dje_pausado_ate if canal == "dje" else self.pausado_ate
-        espera = max(ultima + self.pausa - time.time(), pausa_ate - time.time(), 0)
+        # pausa-base + pausa extra após sobrecarga + metade do tempo da última resposta quando o servidor está lento (>20 s)
+        lenta = self._dur[canal] * 0.5 if self._dur[canal] > 20 else 0.0
+        espera = max(ultima + self.pausa + self._penal[canal] + lenta - time.time(), pausa_ate - time.time(), 0)
         if espera > 0:
             self._dormir(espera)
 

@@ -18,6 +18,8 @@ PADRAO = {
     "dje_base_url": "https://comunicaapi.pje.jus.br",
     # v0.5: varredura diária dos processos em blocos (cada processo consultado 1x por dia, dentro da janela de horário)
     "varredura": {"ativa": True, "bloco": 100, "intervalo_min": 10, "inicio": "02:00"},  # começa de madrugada e vai até consultar tudo (sem horário final)
+    # v0.5.2: inclusão/saída automática do monitoramento diário conforme a OAB apareça (ou não) nas publicações do processo
+    "monitoramento": {"auto_sem_oab": True, "auto_dias": 180},
     "pasta_backup": "",          # vazio = <pasta de dados>/backups (pode ser uma pasta do Dropbox)
     "backup_ativo": True,
     "backup_hora": "02:00",
@@ -107,6 +109,16 @@ class Config:
                     nv["inicio"] = hora
                 nv.pop("fim", None)  # versão 0.5.0 tinha horário final; a varredura agora vai até consultar tudo
                 d["varredura"] = nv
+            mo = novo.get("monitoramento")
+            if isinstance(mo, dict):
+                nm = dict(d["monitoramento"])
+                if "auto_sem_oab" in mo:
+                    nm["auto_sem_oab"] = bool(mo["auto_sem_oab"])
+                if "auto_dias" in mo:
+                    nm["auto_dias"] = int(mo["auto_dias"])
+                    if not 30 <= nm["auto_dias"] <= 1095:
+                        raise ValueError("O prazo de atividade recente deve ficar entre 30 e 1095 dias.")
+                d["monitoramento"] = nm
             if "pasta_backup" in novo:
                 d["pasta_backup"] = str(novo["pasta_backup"]).strip()[:300]
             if "backup_ativo" in novo:

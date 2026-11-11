@@ -6,6 +6,7 @@ Programa local (Windows/Linux/macOS, Python 3.9+, apenas biblioteca padrão) que
 - **DJEN / Comunica PJe (CNJ)**: publicações com o texto, por processo.
 - **Filtros de pesquisa no DJEN**: OAB, CPF/CNPJ ou trecho de texto, para detectar publicações novas em processos ainda não cadastrados.
 - Painel em `http://127.0.0.1:8765`, alertas por e-mail opcionais, dados somente na máquina/servidor do escritório.
+- **Monitorar ou não (v0.5.2)**: marcação por processo (com motivo) para a consulta diária; OAB automática (entra/sai do monitoramento conforme a sua OAB apareça nas publicações do processo); lote parcial do DataJud tratado sem sobrecarregar a API.
 - **Carteira grande (v0.5)**: varredura diária em blocos (cada processo 1x/dia), importação de planilhas, descoberta de processos pela OAB e arquivamento de processos parados.
 - **Equipe (v0.4)**: login por usuário, perfis administrador e usuário, registro de atividades, backup diário (pasta local ou Dropbox) e pasta de dados configurável.
 

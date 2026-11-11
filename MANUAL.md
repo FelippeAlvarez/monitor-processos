@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.5.1)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.5.2)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -157,7 +157,7 @@ Para fazer backup, copie essa pasta. Para apagar tudo, feche o programa e apague
 
 19. VARREDURA DIÁRIA EM BLOCOS (novo na v0.5.0)
 - Para carteiras grandes (centenas ou milhares de processos), o programa não consulta tudo de uma vez: a cada N minutos ele pega um
-  BLOCO de processos ainda não consultados HOJE e consulta o DataJud e o DJEN de cada um. Cada processo é consultado uma vez por dia.
+  BLOCO de processos MONITORADOS (ver seção 21) ainda não consultados HOJE e consulta o DataJud e o DJEN de cada um. Cada um é consultado uma vez por dia.
   Os nunca consultados vão primeiro; depois, os de consulta mais antiga. No dia seguinte recomeça.
 - Configurações > "Varredura diária em blocos": tamanho do bloco (padrão 100), minutos entre blocos (padrão 10) e HORA DE INÍCIO
   (padrão 02:00, de madrugada, quando o CNJ tem menos acessos). Não há horário final: a varredura segue, bloco após bloco, até
@@ -166,6 +166,10 @@ Para fazer backup, copie essa pasta. Para apagar tudo, feche o programa e apague
   (retoma de onde parou, sem repetir quem já foi consultado). Desative a suspensão automática do Windows se quiser a varredura de madrugada.
 - Painel: barra "Varredura diária" mostra quantos já foram consultados hoje. Se a API reclamar de excesso de requisições (429), o
   programa pausa sozinho e o restante segue no bloco seguinte. Processos com erro voltam por nova tentativa automática.
+- Respostas parciais do DataJud (a base do CNJ estoura o tempo interno): o programa repete o MESMO lote após uma espera (20 s, 60 s, 180 s)
+  e aumenta a pausa entre as requisições seguintes (a pausa extra volta ao normal conforme as respostas voltam a vir completas).
+  Se continuar sobrecarregada, o bloco fica pendente e o DataJud descansa por 15 min. O programa NÃO passa a consultar um a um nesse caso,
+  porque isso só aumentaria a carga. Consulta individual só é feita para confirmar a ausência de um processo que o lote não devolveu.
 - Os filtros de pesquisa (OAB, CPF/CNPJ, texto) continuam rodando a cada "intervalo" (Configurações; padrão 6 h) — é a forma mais
   rápida de saber de publicações novas, inclusive em processos ainda não cadastrados.
 - O horário de início é o do relógio do computador/servidor onde o programa roda. Num servidor na nuvem, confira o fuso horário
@@ -176,7 +180,8 @@ Para fazer backup, copie essa pasta. Para apagar tudo, feche o programa e apague
 20. ORGANIZAR A CARTEIRA (novo na v0.5.0)
 - Importar de planilha (aba Adicionar): aceita .xlsx, .csv, .txt ou relatório exportado como página web. Procura números CNJ em qualquer
   célula; se houver cabeçalho com "Cliente", "Pasta" ou "Apelido", essas colunas acompanham cada processo. Mostra uma prévia (novos,
-  repetidos, rejeitados) antes de cadastrar. Em lotes grandes, a primeira consulta de cada processo é feita pela varredura diária.
+  repetidos, rejeitados) antes de cadastrar. Por padrão, os importados ficam SÓ NO CADASTRO (sem consulta diária; ver seção 21); há uma
+  opção para monitorar todos. Em lotes grandes, a conferência de cada um é feita aos poucos, pela varredura diária.
   Arquivo .xls antigo (Excel 97-2003) não é lido: salve como .xlsx ou copie e cole as células na caixa de texto da aba Adicionar.
 - Descobrir processos pela OAB (aba Filtros): em um filtro de OAB, "Descobrir processos" busca no DJEN os processos que tiveram ao menos
   uma publicação nos últimos N meses (padrão 12). "Ver descobertos" lista número, tribunal, classe, última publicação e quantas
@@ -187,3 +192,35 @@ Para fazer backup, copie essa pasta. Para apagar tudo, feche o programa e apague
   os processos sem NENHUMA movimentação nem publicação há mais de N meses (padrão 12), com prévia e confirmação. Processos nunca
   consultados ou sem datas conhecidas não são arquivados. Se um processo arquivado voltar a aparecer numa publicação de um filtro, você é avisado.
 - Painel: busca por número, apelido, cliente ou pasta (sem diferenciar acentos) e filtro Ativos/Só com novidades/Com erro/Arquivados.
+
+21. MONITORAR OU NÃO MONITORAR (novo na v0.5.2)
+- Nem todo processo precisa de consulta diária. Cada processo tem a marcação "monitorar diariamente": só os monitorados entram na
+  varredura em blocos (DataJud + DJEN, uma vez por dia) e no botão "Consultar monitorados agora". Os demais ficam só no cadastro
+  (para pasta, cliente, histórico) e continuam sendo acompanhados de duas formas: (a) as publicações em que a sua OAB aparece chegam
+  pelo filtro de OAB (aba Filtros) e entram no próprio processo, com alerta; (b) o botão "Atualizar" consulta o processo na hora.
+- Quando um processo é monitorado, informe o MOTIVO: processo estratégico, alto valor, tribunal pouco frequente, sem OAB cadastrada no
+  processo, ou outro (com observação livre de até 120 caracteres). O motivo aparece no painel e serve para você revisar a lista depois.
+- Padrões: processo cadastrado à mão (aba Adicionar) nasce MONITORADO (desmarque a caixa se não quiser). Processo importado de planilha
+  ou cadastrado a partir dos "descobertos" nasce NÃO monitorado (há caixas para monitorar todos). Quem já estava cadastrado antes da
+  v0.5.2 continua monitorado. No Painel: botão "Monitorar"/"Parar de monitorar" em cada linha; "Monitorar os da lista…" e "Parar de
+  monitorar os da lista…" agem sobre tudo o que o filtro/busca atual mostra (até 5.000 por vez).
+- OAB automática (Configurações > Monitoramento automático por OAB; ligado por padrão). O programa guarda, para cada processo, se a sua
+  OAB (qualquer filtro do tipo OAB na aba Filtros) aparece na lista de advogados das publicações dele:
+    "OAB aparece" = alguma publicação cita a OAB; "OAB não consta" = há publicações e nenhuma cita a OAB; sem publicação = indeterminado.
+  Para descobrir isso nos processos NÃO monitorados, a varredura confere cada um no DJEN (só o DJEN, que é rápido), e repete a conferência
+  no máximo a cada 7 dias enquanto a OAB não aparecer. Depois que a OAB aparece, o processo sai dessa conferência.
+  Regras: (1) OAB não consta + publicação nos últimos N dias (padrão 180) + processo não monitorado + você nunca o desmarcou à mão =>
+  ENTRA no monitoramento (motivo "sem OAB", "automático") e fica um aviso no painel. (2) Se um processo que entrou assim passar a ter a
+  OAB numa publicação, SAI sozinho do monitoramento, com aviso. (3) Se você marcou o processo à mão com o motivo "sem OAB", ele não sai
+  sozinho: só aparece o aviso sugerindo parar de monitorar. (4) Processo que você desmarcou à mão nunca é incluído pela automação.
+  Avisos ficam no cartão "Avisos" e no filtro "Com aviso" até você clicar em "Dispensar".
+- Limites que você precisa conhecer:
+    * "OAB aparece nas publicações" não prova que você está habilitado nem que receberá toda intimação: o filtro de OAB não pega
+      publicação em que o número da OAB esteja errado ou ausente, nem intimação feita só pelo portal do tribunal. Para processos críticos,
+      mantenha o monitoramento diário ligado e confira no portal.
+    * Ao sair do monitoramento, o processo deixa de ter os MOVIMENTOS do DataJud acompanhados (só as publicações chegam, pelo filtro de OAB).
+    * "OAB não consta" é uma inferência a partir das publicações já vistas; processo sem nenhuma publicação fica indeterminado e a
+      automação não age sobre ele.
+    * Se nenhuma OAB do tipo "OAB" estiver cadastrada na aba Filtros, a automação não faz nada.
+    * Na primeira conferência de uma carteira grande, publicações dos últimos 15 dias de processos conferidos contam como novas e podem
+      gerar um e-mail único com várias publicações.

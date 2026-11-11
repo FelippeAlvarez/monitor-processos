@@ -474,14 +474,37 @@ class TesteLote(Base):
 class TesteRespostaParcial(Base):
     """O que os PDFs do teste real revelaram: o mesmo processo ora aparecia, ora 'não encontrado'."""
 
-    def test_lote_parcial_cai_para_individual_e_nao_gera_nao_encontrado(self):
+    def test_lote_parcial_repete_o_lote_sem_cair_para_individual(self):
         ids = [self.add(f"002000{i}") for i in range(4)]
         ApiFalsa.estado["movs"] = [MOV1]
-        ApiFalsa.estado["sequencia"] = ["parcial"]            # só o lote vem incompleto
+        ApiFalsa.estado["sequencia"] = ["parcial"]            # só a 1ª resposta do lote vem incompleta
         r = self.mon.executar()
         self.assertEqual(r["consultados"], 4)
         self.assertTrue(all(s == "ok" for s in self.status().values()))
-        self.assertEqual(len(ApiFalsa.estado["caminhos"]), 1 + 4)
+        self.assertEqual(len(ApiFalsa.estado["caminhos"]), 2)   # o MESMO lote, repetido após a espera (nada de 1 + 4 requisições)
+        self.assertIn(20, self.esperas)
+
+    def test_lote_parcial_persistente_nao_vira_consulta_individual(self):
+        ids = [self.add(f"002050{i}") for i in range(4)]
+        ApiFalsa.estado["movs"] = [MOV1]
+        ApiFalsa.estado["padrao"] = "parcial"
+        r = self.mon.executar()
+        self.assertEqual(len(ApiFalsa.estado["caminhos"]), 1 + len(self.mon.espera_parcial))   # só repetições do lote
+        self.assertEqual(r["consultados"], 0)
+        self.assertEqual(r["erros"], 0)                        # base sobrecarregada não é erro do processo
+        self.assertIn("sobrecarregada", r["aviso"])
+        self.assertTrue(all(s == "pendente" for s in self.status().values()))
+        self.assertGreater(self.mon.pausado_ate, time.time())  # pausa o DataJud; tenta de novo mais tarde
+
+    def test_ritmo_adaptativo_aumenta_apos_sobrecarga_e_decai(self):
+        self.add("0020600")
+        self.add("0020601")
+        ApiFalsa.estado["movs"] = [MOV1]
+        ApiFalsa.estado["sequencia"] = ["parcial", "parcial"]
+        self.mon.executar()
+        # 2 respostas parciais: pausa extra 15 s -> 30 s; o acerto seguinte reduz pela metade
+        self.assertEqual(self.mon._penal["datajud"], 15.0)
+        self.assertTrue(any(e >= 15 for e in self.esperas))    # a próxima requisição já espera a pausa extra
 
     def test_individual_parcial_repete_e_recupera(self):
         pid = self.add("0021001")
@@ -489,7 +512,7 @@ class TesteRespostaParcial(Base):
         ApiFalsa.estado["sequencia"] = ["parcial", "ok"]
         self.mon.executar()
         self.assertEqual(self.banco.obter(pid)["status"], "ok")
-        self.assertIn(15, self.esperas)
+        self.assertIn(20, self.esperas)
 
     def test_parcial_persistente_vira_erro_e_nao_cria_base(self):
         pid = self.add("0022001")
