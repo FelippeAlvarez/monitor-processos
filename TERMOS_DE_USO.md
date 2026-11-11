@@ -21,6 +21,10 @@ TERMOS DE USO — MONITOR DE PROCESSOS
 5. Chave e credenciais. A chave pública do DataJud pode ser alterada pelo CNJ. As credenciais de e-mail
    informadas ficam armazenadas localmente, sob responsabilidade do usuário.
 
+5-B. Contas de usuário (v0.4). O acesso é pessoal e intransferível; o usuário não deve compartilhar login e senha. O administrador
+   responde pela criação, desativação e perfil das contas e pela proteção do servidor, das pastas de dados e de backup, e da
+   conta de e-mail de envio. As ações relevantes ficam registradas (quem, quando, de que endereço IP).
+
 5-A. API Comunica PJe. Não há documentação oficial conferida pelo desenvolvedor para essa API; seu formato, limites e
    disponibilidade podem mudar sem aviso.
 

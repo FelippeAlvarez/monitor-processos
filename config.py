@@ -2,6 +2,7 @@
 import copy
 import json
 import os
+import re
 import threading
 from pathlib import Path
 
@@ -15,6 +16,10 @@ PADRAO = {
     "endpoints_override": {},
     "dje_ativo": True,
     "dje_base_url": "https://comunicaapi.pje.jus.br",
+    "pasta_backup": "",          # vazio = <pasta de dados>/backups (pode ser uma pasta do Dropbox)
+    "backup_ativo": True,
+    "backup_hora": "02:00",
+    "backup_manter": 30,
     "email": {
         "ativo": False,
         "smtp_host": "smtp.gmail.com",
@@ -80,6 +85,20 @@ class Config:
                 d["intervalo_horas"] = h
             if "dje_ativo" in novo:
                 d["dje_ativo"] = bool(novo["dje_ativo"])
+            if "pasta_backup" in novo:
+                d["pasta_backup"] = str(novo["pasta_backup"]).strip()[:300]
+            if "backup_ativo" in novo:
+                d["backup_ativo"] = bool(novo["backup_ativo"])
+            if "backup_hora" in novo:
+                hora = str(novo["backup_hora"]).strip()
+                if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", hora):
+                    raise ValueError("Hora do backup inválida (use HH:MM, ex.: 02:00).")
+                d["backup_hora"] = hora
+            if "backup_manter" in novo:
+                n = int(novo["backup_manter"])
+                if not 1 <= n <= 365:
+                    raise ValueError("Quantidade de backups guardados deve ficar entre 1 e 365.")
+                d["backup_manter"] = n
             em = novo.get("email")
             if isinstance(em, dict):
                 for campo in ("smtp_host", "usuario", "remetente", "destinatario"):

@@ -45,11 +45,49 @@
   .pub.c { opacity:.6; }
   .pub .tx { white-space:pre-wrap; margin-top:8px; font-size:14px; max-height:none; }
   .tag { display:inline-block; border:1px solid var(--warn); color:var(--warn); border-radius:10px; padding:0 8px; font-size:12px; }
+  header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  header .usr { font-size:13px; display:flex; gap:8px; align-items:center; }
+  header .usr button { background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.4); border-radius:6px; padding:3px 10px; cursor:pointer; font:inherit; font-size:13px; }
+  body:not(.adm) .so-adm { display:none !important; }
+  #login { position:fixed; inset:0; background:var(--bg); z-index:50; display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; }
+  #login .card { width:100%; max-width:380px; }
+  #login.hide { display:none; }
+  dialog { border:1px solid var(--bd); border-radius:10px; background:var(--card); color:var(--tx); max-width:420px; width:calc(100% - 32px); }
+  dialog::backdrop { background:rgba(0,0,0,.5); }
+  select { padding:8px; border:1px solid var(--bd); border-radius:7px; font:inherit; background:var(--bg); color:var(--tx); }
   #msg { position:fixed; bottom:16px; right:16px; background:var(--tx); color:var(--bg); padding:10px 14px; border-radius:8px; max-width:380px; display:none; }
 </style>
 </head>
 <body>
-<header><h1>Monitor de Processos <span class="mut" style="color:#cfe0f2" id="ver"></span></h1></header>
+<div id="login" class="hide"><div class="card">
+  <h2 style="margin-top:0">Monitor de Processos</h2>
+  <div id="l-setup" class="hide"><p><b>Primeiro acesso.</b> Crie o administrador. O código de configuração aparece na janela preta do programa
+    (ou no log do servidor).</p>
+    <label for="s-cod">Código de configuração</label><input id="s-cod" autocomplete="off">
+    <label for="s-nome">Seu nome</label><input id="s-nome" autocomplete="name">
+    <label for="s-email">E-mail (opcional)</label><input id="s-email" type="email" autocomplete="email">
+    <label for="s-user">Nome de usuário (login)</label><input id="s-user" autocomplete="username" placeholder="ex.: felippe">
+    <label for="s-pass">Senha (mínimo 10 caracteres)</label><input id="s-pass" type="password" autocomplete="new-password">
+    <div class="acoes" style="margin-top:12px"><button class="b" id="b-setup">Criar administrador</button></div>
+  </div>
+  <div id="l-entrar" class="hide">
+    <label for="l-user">Usuário</label><input id="l-user" autocomplete="username" autocapitalize="none">
+    <label for="l-pass">Senha</label><input id="l-pass" type="password" autocomplete="current-password">
+    <div class="acoes" style="margin-top:12px"><button class="b" id="b-entrar">Entrar</button></div>
+  </div>
+  <p class="err" id="l-erro" style="min-height:1.4em"></p>
+  <p class="mut">Uso restrito à equipe. Esta ferramenta é apenas apoio e não substitui a consulta aos portais dos tribunais.</p>
+</div></div>
+<dialog id="d-senha"><form method="dialog" id="f-senha">
+  <h3 style="margin-top:0">Alterar senha</h3>
+  <p class="mut hide" id="d-obrig">Você precisa definir uma nova senha antes de continuar.</p>
+  <label for="p-atual">Senha atual</label><input id="p-atual" type="password" autocomplete="current-password">
+  <label for="p-nova">Nova senha (mínimo 10 caracteres)</label><input id="p-nova" type="password" autocomplete="new-password">
+  <p class="err" id="p-erro"></p>
+  <div class="acoes"><button class="b" type="button" id="b-senha-ok">Salvar</button><button class="b sec" type="button" id="b-senha-x">Cancelar</button></div>
+</form></dialog>
+<header><h1>Monitor de Processos <span class="mut" style="color:#cfe0f2" id="ver"></span></h1>
+  <div class="usr hide" id="usr"><span id="usr-nome"></span><button id="b-conta">Alterar senha</button><button id="b-sair">Sair</button></div></header>
 <div class="aviso"><b>Atenção:</b> movimentações vêm do DataJud (metadados, com defasagem) e publicações do DJEN (Comunica PJe).
 Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, as intimações oficiais nem o controle de prazos.</b></div>
 <nav id="nav">
@@ -57,7 +95,8 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   <button data-t="publicacoes">Publicações <span class="badge hide" id="nav-pub"></span></button>
   <button data-t="oab">Filtros <span class="badge hide" id="nav-oab"></span></button>
   <button data-t="adicionar">Adicionar</button>
-  <button data-t="config">Configurações</button>
+  <button data-t="equipe" class="so-adm">Equipe</button>
+  <button data-t="config" class="so-adm">Configurações</button>
   <button data-t="sobre">Sobre</button>
 </nav>
 <main>
@@ -98,7 +137,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
 </section>
 
 <section id="t-oab" class="hide">
-  <div class="card">
+  <div class="card so-adm">
     <b>Filtros de pesquisa no DJEN</b>
     <p class="mut">Cadastre quantos filtros quiser: OAB, CPF/CNPJ ou trecho de texto. O programa avisa de publicações <b>novas</b> em processos que você
     <b>ainda não cadastrou</b> (os já cadastrados são acompanhados na aba Publicações). Ao cadastrar, valem só as publicações dos últimos 2 dias em diante;
@@ -146,6 +185,46 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   </div>
 </section>
 
+<section id="t-equipe" class="hide">
+  <div class="card">
+    <b>Usuários</b>
+    <p class="mut">Perfis: <b>administrador</b> (gerencia usuários, filtros e configurações, e faz tudo o que o usuário faz) e <b>usuário</b>
+    (processos, publicações e consultas). O perfil <i>cliente</i> está previsto para uma versão futura. Usuários não são apagados, apenas desativados,
+    para preservar o histórico de quem fez o quê.</p>
+    <div style="overflow-x:auto"><table><thead><tr><th>Usuário</th><th>Nome / e-mail</th><th>Perfil</th><th>Situação</th><th></th></tr></thead><tbody id="u-lista"></tbody></table></div>
+  </div>
+  <div class="card">
+    <b>Novo usuário</b>
+    <div class="grid2">
+      <div><label for="n-user">Login</label><input id="n-user" autocomplete="off" placeholder="ex.: maria"></div>
+      <div><label for="n-nome">Nome</label><input id="n-nome" autocomplete="off"></div>
+      <div><label for="n-email">E-mail (para os avisos)</label><input id="n-email" type="email" autocomplete="off"></div>
+      <div><label for="n-perfil">Perfil</label><select id="n-perfil" style="width:100%"><option value="usuario">Usuário</option><option value="admin">Administrador</option></select></div>
+      <div><label for="n-senha">Senha provisória (mínimo 10 caracteres)</label><input id="n-senha" type="text" autocomplete="off"></div>
+    </div>
+    <p class="mut">A pessoa será obrigada a trocar a senha no primeiro acesso. Combine a senha provisória por um canal seguro.</p>
+    <button class="b" id="b-user-add">Criar usuário</button>
+  </div>
+  <div class="card">
+    <b>Backup e pasta de dados</b>
+    <p class="mut" id="bk-info"></p>
+    <div class="grid2">
+      <div><label for="bk-pasta">Pasta dos backups (vazio = pasta “backups” dentro da pasta de dados)</label><input id="bk-pasta" placeholder="ex.: C:\Users\...\Dropbox\Monitor\backups"></div>
+      <div><label for="bk-hora">Hora do backup diário</label><input id="bk-hora" type="time" style="max-width:160px"></div>
+      <div><label for="bk-manter">Quantos backups guardar</label><input id="bk-manter" type="number" min="1" max="365" style="max-width:160px"></div>
+      <div><label><input type="checkbox" id="bk-ativo" style="width:auto"> Backup diário automático</label></div>
+    </div>
+    <div class="acoes" style="margin-top:10px"><button class="b" id="b-bk-salvar">Salvar</button><button class="b sec" id="b-bk-agora">Fazer backup agora</button></div>
+    <div id="bk-lista" class="mut" style="margin-top:10px"></div>
+  </div>
+  <div class="card">
+    <b>Registro de atividades</b>
+    <p class="mut">Logins, alterações de usuários e configurações, processos e filtros incluídos ou removidos, backups.</p>
+    <div class="acoes"><button class="b sec sm" id="b-aud">Atualizar</button></div>
+    <div style="overflow-x:auto"><table><thead><tr><th>Quando</th><th>Quem</th><th>Ação</th><th>Detalhe</th><th>IP</th></tr></thead><tbody id="aud-lista"></tbody></table></div>
+  </div>
+</section>
+
 <section id="t-config" class="hide">
   <div class="card">
     <label for="k-key">Chave da API pública do DataJud</label>
@@ -164,9 +243,9 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
       <div><label for="e-user">Usuário (e-mail de envio)</label><input id="e-user" autocomplete="off"></div>
       <div><label for="e-senha">Senha de aplicativo</label><input id="e-senha" type="password" autocomplete="new-password" placeholder="(deixe vazio para manter a atual)"></div>
       <div><label for="e-rem">Remetente (opcional)</label><input id="e-rem"></div>
-      <div><label for="e-dest">Destinatário</label><input id="e-dest"></div>
+      <div><label for="e-dest">Destinatário(s) — separe vários por vírgula</label><input id="e-dest"></div>
     </div>
-    <p class="mut">Gmail: use uma “senha de app” criada só para esta finalidade, nunca a senha da conta. A senha fica gravada em texto simples no arquivo <code>dados/config.json</code> deste computador.</p>
+    <p class="mut">Gmail: use uma “senha de app” criada só para esta finalidade, nunca a senha da conta. A senha fica gravada em texto simples no arquivo <code>config.json</code> da pasta de dados do servidor (não vai para o backup nem para o GitHub).</p>
     <div class="acoes"><button class="b" id="b-cfg">Salvar</button><button class="b sec" id="b-teste">Enviar e-mail de teste (salve antes)</button></div>
   </div>
 </section>
@@ -192,6 +271,7 @@ const esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&
 async function api(url, metodo = "GET", corpo) {
   const r = await fetch(url, { method: metodo, headers: {"Content-Type": "application/json"}, body: corpo ? JSON.stringify(corpo) : undefined });
   const d = await r.json().catch(() => ({}));
+  if (r.status === 401 && d.login) { mostrarLogin(); throw new Error(d.erro); }
   if (!r.ok) throw new Error(d.erro || ("Erro " + r.status));
   return d;
 }
@@ -207,6 +287,7 @@ document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x === b));
   document.querySelectorAll("main > section").forEach(s => s.classList.toggle("hide", s.id !== "t-" + b.dataset.t));
   if (b.dataset.t === "config") carregarConfig();
+  if (b.dataset.t === "equipe") carregarEquipe();
   if (b.dataset.t === "sobre") carregarSobre();
   if (b.dataset.t === "publicacoes") carregarPublicacoes();
   if (b.dataset.t === "oab") carregarOab();
@@ -337,7 +418,7 @@ async function carregarOab() {
     return `<tr><td><b>${esc(descFiltro(o.tipo, o.numero, o.uf))}</b>${o.rotulo ? `<br><span class="mut">${esc(o.rotulo)}</span>` : ""}</td>
       <td><span class="${c}">${t}</span>${o.mensagem ? `<br><span class="${o.status === "erro" ? "err" : "warn"}" style="font-size:13px">${esc(o.mensagem)}</span>` : ""}<br><span class="mut">consultada: ${fmtUtc(o.ultima_consulta)}</span></td>
       <td>${o.pub_novas ? `<span class="badge">${o.pub_novas} nova(s)</span> ` : ""}<span class="mut">${o.pub_total} guardada(s)</span></td>
-      <td><div class="acoes"><button class="b sm sec" data-oc="${o.id}">Consultar</button><button class="b sm dg" data-od="${o.id}">Remover</button></div></td></tr>`;
+      <td><div class="acoes"><button class="b sm sec" data-oc="${o.id}">Consultar</button><button class="b sm dg so-adm" data-od="${o.id}">Remover</button></div></td></tr>`;
   }).join("");
   const so = $("#op-novas").checked;
   const pubs = await api("/api/oab-publicacoes" + (so ? "?novas=1" : ""));
@@ -419,8 +500,106 @@ document.querySelectorAll("[data-doc]").forEach(b => b.onclick = async () => {
   p.textContent = await r.text(); p.classList.remove("hide");
 });
 
+// ---- login / sessão
+let EU = null;
+function mostrarLogin(setup) {
+  $("#login").classList.remove("hide");
+  $("#l-setup").classList.toggle("hide", !setup); $("#l-entrar").classList.toggle("hide", !!setup);
+  setTimeout(() => (setup ? $("#s-cod") : $("#l-user")).focus(), 50);
+}
+async function post(url, corpo) {
+  const r = await fetch(url, { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(corpo) });
+  const d = await r.json().catch(() => ({})); if (!r.ok) throw new Error(d.erro || ("Erro " + r.status)); return d;
+}
+$("#b-entrar").onclick = async () => {
+  $("#l-erro").textContent = "";
+  try { await post("/api/login", { usuario: $("#l-user").value, senha: $("#l-pass").value }); location.reload(); }
+  catch (e) { $("#l-erro").textContent = e.message; }
+};
+$("#l-pass").onkeydown = (e) => { if (e.key === "Enter") $("#b-entrar").click(); };
+$("#b-setup").onclick = async () => {
+  $("#l-erro").textContent = "";
+  try { await post("/api/setup", { codigo: $("#s-cod").value, nome: $("#s-nome").value, email: $("#s-email").value, usuario: $("#s-user").value, senha: $("#s-pass").value }); location.reload(); }
+  catch (e) { $("#l-erro").textContent = e.message; }
+};
+$("#b-sair").onclick = async () => { try { await post("/api/logout", {}); } catch (e) {} location.reload(); };
+const dSenha = $("#d-senha");
+function abrirSenha(obrigatoria) {
+  $("#p-atual").value = ""; $("#p-nova").value = ""; $("#p-erro").textContent = "";
+  $("#d-obrig").classList.toggle("hide", !obrigatoria); $("#b-senha-x").classList.toggle("hide", !!obrigatoria);
+  dSenha.oncancel = (e) => { if (obrigatoria) e.preventDefault(); };
+  dSenha.showModal();
+}
+$("#b-conta").onclick = () => abrirSenha(false);
+$("#b-senha-x").onclick = () => dSenha.close();
+$("#b-senha-ok").onclick = async () => {
+  try { await post("/api/senha", { atual: $("#p-atual").value, nova: $("#p-nova").value }); dSenha.close(); aviso("Senha alterada."); if (EU && EU.trocar_senha) location.reload(); }
+  catch (e) { $("#p-erro").textContent = e.message; }
+};
+
+// ---- equipe (admin)
+const PERFIL = { admin: "Administrador", usuario: "Usuário" };
+async function carregarEquipe() {
+  const us = await api("/api/usuarios");
+  $("#u-lista").innerHTML = us.map(u => `<tr><td class="num">${esc(u.usuario)}</td>
+    <td>${esc(u.nome)}<br><span class="mut">${esc(u.email || "sem e-mail")}</span></td>
+    <td><select data-up="${u.id}">${Object.entries(PERFIL).map(([k, v]) => `<option value="${k}" ${u.perfil === k ? "selected" : ""}>${v}</option>`).join("")}</select></td>
+    <td>${u.ativo ? '<span class="ok">Ativo</span>' : '<span class="err">Desativado</span>'}${u.bloqueado ? '<br><span class="warn">bloqueado por tentativas</span>' : ""}${u.trocar_senha ? '<br><span class="mut">troca de senha pendente</span>' : ""}
+      <br><span class="mut">último acesso: ${fmtUtc(u.ultimo_acesso)}</span></td>
+    <td><div class="acoes"><button class="b sm sec" data-ua="${u.id}" data-ativo="${u.ativo ? 0 : 1}">${u.ativo ? "Desativar" : "Reativar"}</button>
+      <button class="b sm sec" data-us="${u.id}" data-un="${esc(u.usuario)}">Nova senha</button></div></td></tr>`).join("");
+  carregarBackup(); carregarAuditoria();
+}
+$("#u-lista").addEventListener("change", async (e) => {
+  const sel = e.target.closest("[data-up]"); if (!sel) return;
+  try { await post("/api/usuarios/" + sel.dataset.up, { perfil: sel.value }); aviso("Perfil alterado."); } catch (er) { aviso(er.message); }
+  carregarEquipe();
+});
+$("#u-lista").addEventListener("click", async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  try {
+    if (b.dataset.ua) { await post("/api/usuarios/" + b.dataset.ua, { ativo: b.dataset.ativo === "1" }); carregarEquipe(); }
+    if (b.dataset.us) {
+      const s = prompt(`Nova senha provisória para "${b.dataset.un}" (mínimo 10 caracteres). A pessoa terá de trocá-la no próximo acesso e será desconectada.`);
+      if (s) { await post(`/api/usuarios/${b.dataset.us}/senha`, { senha: s }); aviso("Senha redefinida."); carregarEquipe(); }
+    }
+  } catch (er) { aviso(er.message); }
+});
+$("#b-user-add").onclick = async () => {
+  try {
+    await post("/api/usuarios", { usuario: $("#n-user").value, nome: $("#n-nome").value, email: $("#n-email").value, perfil: $("#n-perfil").value, senha: $("#n-senha").value });
+    ["#n-user", "#n-nome", "#n-email", "#n-senha"].forEach(i => $(i).value = ""); aviso("Usuário criado."); carregarEquipe();
+  } catch (e) { aviso(e.message); }
+};
+async function carregarBackup() {
+  const b = await api("/api/backup");
+  $("#bk-info").innerHTML = `Pasta de dados em uso: <b>${esc(b.pasta_dados)}</b> (para mudar, veja o Manual, seção 18).<br>Backups gravados em: <b>${esc(b.pasta)}</b>`;
+  $("#bk-pasta").value = b.pasta_configurada; $("#bk-hora").value = b.hora; $("#bk-manter").value = b.manter; $("#bk-ativo").checked = b.ativo;
+  $("#bk-lista").innerHTML = b.backups.length ? "Últimos backups: " + b.backups.slice(0, 5).map(x => `${fmt(x.quando)} (${(x.bytes / 1048576).toFixed(1)} MB)`).join(" · ")
+    : '<span class="warn">Nenhum backup feito ainda.</span>';
+}
+$("#b-bk-salvar").onclick = async () => {
+  try { await api("/api/config", "POST", { pasta_backup: $("#bk-pasta").value, backup_hora: $("#bk-hora").value, backup_manter: $("#bk-manter").value, backup_ativo: $("#bk-ativo").checked });
+    aviso("Configuração de backup salva."); carregarBackup(); } catch (e) { aviso(e.message); }
+};
+$("#b-bk-agora").onclick = async () => { try { const r = await api("/api/backup", "POST", {}); aviso("Backup gravado: " + r.arquivo); carregarBackup(); } catch (e) { aviso(e.message); } };
+async function carregarAuditoria() {
+  const a = await api("/api/auditoria?limite=100");
+  $("#aud-lista").innerHTML = a.map(x => `<tr><td class="num">${fmtUtc(x.quando)}</td><td>${esc(x.usuario || "—")}</td><td>${esc(x.acao)}</td><td>${esc(x.detalhe)}</td><td class="mut">${esc(x.ip)}</td></tr>`).join("")
+    || '<tr><td colspan="5" class="mut">Sem registros.</td></tr>';
+}
+$("#b-aud").onclick = () => carregarAuditoria().catch(e => aviso(e.message));
+
 (async () => {
-  try { const s = await api("/api/sobre"); $("#ver").textContent = "v" + s.versao; } catch (e) {}
+  let sess;
+  try { sess = await (await fetch("/api/sessao")).json(); } catch (e) { return; }
+  if (sess.versao) $("#ver").textContent = "v" + sess.versao;
+  if (!sess.usuario) { mostrarLogin(sess.precisa_setup); return; }
+  EU = sess.usuario;
+  document.body.classList.toggle("adm", EU.perfil === "admin");
+  $("#usr-nome").textContent = EU.nome + (EU.perfil === "admin" ? " (administrador)" : "");
+  $("#usr").classList.remove("hide");
+  if (EU.trocar_senha) { abrirSenha(true); return; }
   await carregarLista(); await status();
   setInterval(status, 4000); setInterval(carregarLista, 30000);
 })();

@@ -5,15 +5,16 @@ Programa local (Windows/Linux/macOS, Python 3.9+, apenas biblioteca padrão) que
 - **DataJud (CNJ)**: movimentações dos processos cadastrados (metadados, com defasagem).
 - **DJEN / Comunica PJe (CNJ)**: publicações com o texto, por processo.
 - **Filtros de pesquisa no DJEN**: OAB, CPF/CNPJ ou trecho de texto, para detectar publicações novas em processos ainda não cadastrados.
-- Painel local em `http://127.0.0.1:8765`, alertas por e-mail opcionais, dados somente no computador do usuário.
+- Painel em `http://127.0.0.1:8765`, alertas por e-mail opcionais, dados somente na máquina/servidor do escritório.
+- **Equipe (v0.4)**: login por usuário, perfis administrador e usuário, registro de atividades, backup diário (pasta local ou Dropbox) e pasta de dados configurável.
 
 > **Apoio, não substituto.** Este programa não substitui intimações, a conferência da publicação oficial nem o controle de prazos.
 > A API do DJEN não tem documentação oficial conferida; o formato foi deduzido de respostas reais.
 
 ## Uso (resumo)
 1. Instale o Python 3.9+ (marque "Add python.exe to PATH" no Windows).
-2. Execute `iniciar.bat` (ou `python app.py`).
-3. Para usar pelo celular na mesma rede, execute `iniciar-celular.bat` (ver seção 16 do manual).
+2. Execute `iniciar.bat` (ou `python app.py`). No primeiro acesso, crie o administrador com o código mostrado na janela (manual, seção 17).
+3. Para usar pelo celular na mesma rede, execute `iniciar-celular.bat` (seção 16 do manual); para servidor, Dropbox e backup, veja a seção 18.
 4. Veja o manual completo em `MANUAL.md` (também na aba **Sobre** do painel).
 
 ## Testes

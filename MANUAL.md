@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.3.1)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.4.0)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -112,11 +112,45 @@ Para fazer backup, copie essa pasta. Para apagar tudo, feche o programa e apague
 - Para uma parte com muitas ações (ex.: uma cooperativa grande) o volume pode ser alto: use com critério.
 - Os textos podem conter CPF/CNPJ e dados de terceiros: tratamento local, sob sua responsabilidade (LGPD).
 
-16. USAR PELO CELULAR (novo na v0.3.3)
-- Dê dois cliques em iniciar-celular.bat (em vez de iniciar.bat). A janela mostra um endereço do tipo
-  http://192.168.x.x:8765/?codigo=XXXX. Com o celular no MESMO Wi-Fi do computador, abra esse endereço uma vez no navegador do celular:
-  o aparelho fica autorizado e depois basta abrir http://192.168.x.x:8765.
+16. USAR PELO CELULAR (atualizado na v0.4.0)
+- Dê dois cliques em iniciar-celular.bat (em vez de iniciar.bat). A janela mostra o endereço do tipo http://192.168.x.x:8765.
+  Com o celular no MESMO Wi-Fi do computador, abra esse endereço e entre com seu usuário e senha (seção 17).
 - O computador precisa estar ligado, com a janela aberta. Se o Windows perguntar sobre o Firewall, permita em "Redes privadas".
-- O código de acesso fica em dados/config.json. Para trocá-lo, apague a linha "codigo_acesso" e reinicie.
-- Fora de casa: instale o Tailscale (gratuito) no computador e no celular; use o endereço 100.x.x.x do computador, sem abrir nada para a internet.
-- Em Wi-Fi público não use o modo rede: o código viaja sem criptografia (HTTP).
+- Fora de casa: Tailscale (gratuito) no computador e no celular, ou um servidor na nuvem com HTTPS (seção 18).
+- Em Wi-Fi público não use o modo rede sem HTTPS: a senha viajaria sem criptografia.
+
+17. USUÁRIOS, LOGIN E PERFIS (novo na v0.4.0)
+- Todo acesso exige usuário e senha. O código de acesso da v0.3.3 foi abolido.
+- Primeiro acesso: a janela do programa mostra um "código de configuração". Abra o endereço, preencha o formulário de
+  primeiro acesso (nome, usuário, senha) e esse código. Isso cria o administrador. O código vale só enquanto não houver usuários.
+- Perfis: ADMINISTRADOR (gerencia usuários, filtros de pesquisa, configurações, backup e vê o registro de atividades; faz também
+  tudo o que o usuário faz) e USUÁRIO (processos, publicações, consultas). O perfil CLIENTE está previsto para a v0.9.
+- Aba "Equipe" (só administrador): criar usuários, mudar o perfil, desativar/reativar e redefinir a senha. Usuários não são
+  apagados, só desativados, para preservar o histórico. Quem recebe senha provisória é obrigado a trocá-la no primeiro acesso.
+- Senhas: mínimo de 10 caracteres, guardadas só como hash (scrypt). Após 5 senhas erradas seguidas a conta fica bloqueada por 15 minutos.
+  A sessão dura até 14 dias sem uso; "Sair" encerra a sessão. Desativar um usuário ou redefinir sua senha o desconecta na hora.
+- O sistema não deixa desativar nem rebaixar o último administrador, nem a própria conta.
+- Registro de atividades (aba Equipe): logins (e tentativas falhas), alterações de usuários e configurações, processos e filtros
+  incluídos/removidos, backups. As senhas nunca são registradas.
+- E-mails de alerta: o campo "Destinatário" aceita vários endereços separados por vírgula. (O envio por responsável vem na v0.6.)
+
+18. PASTA DE DADOS, DROPBOX, BACKUP E SERVIDOR (novo na v0.4.0)
+- A pasta de dados (banco, configuração e log) fica por padrão na pasta "dados" ao lado do programa. Para usar outra pasta,
+  inclusive uma pasta do Dropbox, crie ao lado de app.py o arquivo local.json (modelo em local.json.exemplo):
+      {"pasta_dados": "C:\\Users\\SeuNome\\Dropbox\\Monitor"}
+  (no JSON, cada barra invertida é escrita em dobro). Outra opção é definir a variável de ambiente MONITOR_DADOS.
+- ATENÇÃO — REGRA DE OURO: só UM computador pode executar o programa sobre a mesma pasta de dados. O Dropbox sincroniza o
+  arquivo inteiro e não sabe mesclar: dois computadores gravando no mesmo banco geram cópias "em conflito" e podem corromper os
+  dados. O programa impede isso (arquivo servidor.lock) e se recusa a abrir se outro computador estiver usando a pasta.
+  O desenho recomendado: UM computador/servidor roda o programa; os demais usam pelo navegador, com login.
+- Mesmo com um só computador, o Dropbox pode enviar o processos.db enquanto o programa o usa; por isso o backup diário (arquivo
+  novo e consistente) é a cópia confiável, e o arquivo vivo não deve ser aberto em outro lugar.
+- Dropbox como destino de backup é seguro (cada backup é um arquivo novo). Aba Equipe > Backup: defina a pasta (ex.: uma pasta
+  do Dropbox), a hora (padrão 02:00) e quantos backups guardar (padrão 30). O backup é uma cópia consistente do banco; não inclui
+  config.json (que tem a senha do e-mail). Ele inclui os hashes das senhas dos usuários e os dados dos processos: trate a pasta
+  de backup com o mesmo cuidado do banco. Para restaurar: feche o programa, copie o backup desejado sobre processos.db (na pasta de
+  dados) e abra de novo.
+- Servidor na internet (necessário para clientes e para acesso de qualquer lugar): defina MONITOR_REDE=1, MONITOR_PROXY=1 e
+  MONITOR_ENDERECO=127.0.0.1, e coloque na frente um servidor web com HTTPS (por exemplo o Caddy, que obtém o certificado sozinho:
+  "seudominio.com.br { reverse_proxy 127.0.0.1:8765 }"). Sem HTTPS, não exponha o programa à internet. Com MONITOR_PROXY=1 o
+  programa confia nos cabeçalhos X-Forwarded-For/Proto do proxy; só ligue isso se o programa for acessível apenas por ele.

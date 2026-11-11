@@ -5,3 +5,6 @@ __pycache__/
 *.db
 config.json
 .env
+local.json
+servidor.lock
+backups/
