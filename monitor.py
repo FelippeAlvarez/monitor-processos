@@ -142,7 +142,7 @@ class Monitor:
     def na_janela(self, agora=None):
         v = self._cfg_varredura()
         a = (agora or dt.datetime.now()).time()
-        return self._hhmm(v.get("inicio"), dt.time(7, 0)) <= a < self._hhmm(v.get("fim"), dt.time(20, 0))
+        return a >= self._hhmm(v.get("inicio"), dt.time(2, 0))  # sem horário final: vale até consultar tudo (ou até a meia-noite)
 
     def candidatos_hoje(self, agora=None):
         """Ids ainda não consultados hoje, na ordem de prioridade (nunca consultados primeiro)."""
@@ -170,13 +170,13 @@ class Monitor:
         ativos = len(self.banco.ativos())
         feitos = self.banco.consultados_desde(inicio_do_dia_utc(agora))
         intervalo = int(v.get("intervalo_min", 30)) or 30
-        ini, fim = self._hhmm(v.get("inicio"), dt.time(7, 0)), self._hhmm(v.get("fim"), dt.time(20, 0))
-        minutos = (fim.hour * 60 + fim.minute) - (ini.hour * 60 + ini.minute)
-        blocos = max(0, minutos // intervalo)
+        tam = max(1, int(v.get("bloco", 100)))
+        # estimativa grosseira: nº de blocos restantes x intervalo (cada bloco também leva alguns minutos para rodar)
+        previsao_min = (-(-max(0, ativos - feitos) // tam)) * intervalo
         return {"ativa": self.varredura_ativa(), "ativos": ativos, "feitos_hoje": feitos,
                 "restantes": max(0, ativos - feitos), "bloco": int(v.get("bloco", 100)), "intervalo_min": intervalo,
-                "inicio": v.get("inicio"), "fim": v.get("fim"), "na_janela": self.na_janela(agora),
-                "capacidade_dia": blocos * int(v.get("bloco", 100)),
+                "inicio": v.get("inicio"), "na_janela": self.na_janela(agora),
+                "previsao_min": previsao_min,
                 "proximo_bloco": (self.ultimo_bloco + intervalo * 60) if self.ultimo_bloco else None}
 
     def agendar_pendentes(self):

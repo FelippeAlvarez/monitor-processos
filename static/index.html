@@ -256,13 +256,12 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   </div>
   <div class="card">
     <label><input type="checkbox" id="v-ativa" style="width:auto"> Varredura diária em blocos (recomendado com muitos processos)</label>
-    <p class="mut">Cada processo ativo é consultado <b>uma vez por dia</b>, em blocos, dentro da janela de horário. Os mais antigos e os nunca consultados vão primeiro.
+    <p class="mut">Cada processo ativo é consultado <b>uma vez por dia</b>, em blocos, começando na hora definida abaixo e continuando até consultar todos. Os mais antigos e os nunca consultados vão primeiro.
     Processos arquivados não são consultados.</p>
     <div class="grid2">
       <div><label for="v-bloco">Processos por bloco (10 a 500)</label><input id="v-bloco" type="number" min="10" max="500"></div>
       <div><label for="v-int">Minutos entre blocos (5 a 240)</label><input id="v-int" type="number" min="5" max="240"></div>
-      <div><label for="v-ini">Início da janela</label><input id="v-ini" type="time"></div>
-      <div><label for="v-fim">Fim da janela</label><input id="v-fim" type="time"></div>
+      <div><label for="v-ini">Hora em que a varredura do dia começa (madrugada = menos acesso ao CNJ)</label><input id="v-ini" type="time"></div>
     </div>
     <p class="mut" id="v-cap"></p>
   </div>
@@ -429,10 +428,11 @@ async function status() {
       $("#vr-card").classList.remove("hide");
       const pct = v.ativos ? Math.round(100 * v.feitos_hoje / v.ativos) : 100;
       $("#vr-barra").style.width = pct + "%";
-      $("#vr-txt").textContent = `${v.feitos_hoje} de ${v.ativos} processos consultados hoje · blocos de ${v.bloco} a cada ${v.intervalo_min} min, entre ${v.inicio} e ${v.fim}` +
-        (v.restantes === 0 ? " · concluída por hoje" : (v.na_janela ? "" : " · fora do horário (retoma às " + v.inicio + ")"));
+      const prev = v.previsao_min >= 60 ? `~${Math.round(v.previsao_min / 6) / 10} h` : `~${v.previsao_min} min`;
+      $("#vr-txt").textContent = `${v.feitos_hoje} de ${v.ativos} processos consultados hoje · blocos de ${v.bloco} a cada ${v.intervalo_min} min, a partir das ${v.inicio}` +
+        (v.restantes === 0 ? " · concluída por hoje" : (v.na_janela ? ` · faltam ${prev} no ritmo atual` : " · começa às " + v.inicio));
       const av = $("#vr-aviso");
-      av.textContent = v.capacidade_dia < v.ativos ? `Atenção: a capacidade diária configurada (${v.capacidade_dia}) é menor que o número de processos ativos (${v.ativos}). Aumente o bloco, diminua o intervalo ou amplie a janela em Configurações.` : "";
+      av.textContent = v.previsao_min > 16 * 60 ? "Atenção: no ritmo configurado, a varredura não termina em um dia. Aumente o bloco ou diminua o intervalo em Configurações." : "";
       av.classList.toggle("hide", !av.textContent);
     } else $("#vr-card").classList.add("hide");
     if (!(v && v.ativa) && !s.rodando && s.proximo_ciclo) partes.push("próxima consulta geral: " + new Date(s.proximo_ciclo * 1000).toLocaleString("pt-BR"));
@@ -620,7 +620,7 @@ $("#b-i-ok").onclick = async () => {
 async function carregarConfig() {
   const c = await api("/api/config");
   $("#k-key").value = c.api_key; $("#k-dje").checked = c.dje_ativo !== false; $("#k-int").value = c.intervalo_horas;
-  const v = c.varredura; $("#v-ativa").checked = v.ativa; $("#v-bloco").value = v.bloco; $("#v-int").value = v.intervalo_min; $("#v-ini").value = v.inicio; $("#v-fim").value = v.fim;
+  const v = c.varredura; $("#v-ativa").checked = v.ativa; $("#v-bloco").value = v.bloco; $("#v-int").value = v.intervalo_min; $("#v-ini").value = v.inicio;
   capacidade();
   const e = c.email;
   $("#e-ativo").checked = e.ativo; $("#e-host").value = e.smtp_host; $("#e-porta").value = e.smtp_porta;
@@ -628,15 +628,14 @@ async function carregarConfig() {
   $("#e-senha").value = ""; $("#e-senha").placeholder = e.senha_definida ? "(senha já definida — deixe vazio para manter)" : "senha de aplicativo";
 }
 function capacidade() {
-  const hm = (t) => { const [h, m] = (t || "0:0").split(":").map(Number); return h * 60 + m; };
-  const n = Math.floor((hm($("#v-fim").value) - hm($("#v-ini").value)) / (Number($("#v-int").value) || 30));
-  $("#v-cap").textContent = n > 0 ? `Capacidade: até ${n * Number($("#v-bloco").value || 0)} processos por dia (${n} blocos).` : "Janela inválida.";
+  const bloco = Number($("#v-bloco").value) || 0, iv = Number($("#v-int").value) || 0;
+  $("#v-cap").textContent = bloco && iv ? `Com ${bloco} processos a cada ${iv} min, 1.000 processos levam cerca de ${Math.round(Math.ceil(1000 / bloco) * iv / 6) / 10} h (a varredura vai até consultar tudo; não há horário final).` : "";
 }
-["#v-bloco", "#v-int", "#v-ini", "#v-fim"].forEach(i => $(i).oninput = capacidade);
+["#v-bloco", "#v-int"].forEach(i => $(i).oninput = capacidade);
 $("#b-cfg").onclick = async () => {
   try {
     await api("/api/config", "POST", { api_key: $("#k-key").value, dje_ativo: $("#k-dje").checked, intervalo_horas: $("#k-int").value,
-      varredura: { ativa: $("#v-ativa").checked, bloco: $("#v-bloco").value, intervalo_min: $("#v-int").value, inicio: $("#v-ini").value, fim: $("#v-fim").value },
+      varredura: { ativa: $("#v-ativa").checked, bloco: $("#v-bloco").value, intervalo_min: $("#v-int").value, inicio: $("#v-ini").value },
       email: { ativo: $("#e-ativo").checked, smtp_host: $("#e-host").value, smtp_porta: $("#e-porta").value, usuario: $("#e-user").value,
                senha: $("#e-senha").value, remetente: $("#e-rem").value, destinatario: $("#e-dest").value } });
     aviso("Configurações salvas."); carregarConfig();

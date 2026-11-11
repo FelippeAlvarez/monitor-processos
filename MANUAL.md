@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.5.0)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.5.1)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -159,14 +159,16 @@ Para fazer backup, copie essa pasta. Para apagar tudo, feche o programa e apague
 - Para carteiras grandes (centenas ou milhares de processos), o programa não consulta tudo de uma vez: a cada N minutos ele pega um
   BLOCO de processos ainda não consultados HOJE e consulta o DataJud e o DJEN de cada um. Cada processo é consultado uma vez por dia.
   Os nunca consultados vão primeiro; depois, os de consulta mais antiga. No dia seguinte recomeça.
-- Configurações > "Varredura diária em blocos": tamanho do bloco (padrão 100), minutos entre blocos (padrão 30) e janela de horário
-  (padrão 07:00 às 20:00). Capacidade = blocos na janela x tamanho do bloco; o Painel avisa se for menor que o número de processos.
-  Exemplo: 100 por bloco, a cada 30 min, das 07:00 às 20:00 = 26 blocos = até 2.600 processos/dia.
+- Configurações > "Varredura diária em blocos": tamanho do bloco (padrão 100), minutos entre blocos (padrão 10) e HORA DE INÍCIO
+  (padrão 02:00, de madrugada, quando o CNJ tem menos acessos). Não há horário final: a varredura segue, bloco após bloco, até
+  consultar todos os processos do dia. Exemplo: 1.400 processos em blocos de 100 a cada 10 min = 14 blocos, cerca de 2 a 3 horas.
+- Computador desligado ou em repouso às 02:00? A varredura do dia roda assim que o programa estiver aberto e o computador ligado
+  (retoma de onde parou, sem repetir quem já foi consultado). Desative a suspensão automática do Windows se quiser a varredura de madrugada.
 - Painel: barra "Varredura diária" mostra quantos já foram consultados hoje. Se a API reclamar de excesso de requisições (429), o
   programa pausa sozinho e o restante segue no bloco seguinte. Processos com erro voltam por nova tentativa automática.
 - Os filtros de pesquisa (OAB, CPF/CNPJ, texto) continuam rodando a cada "intervalo" (Configurações; padrão 6 h) — é a forma mais
   rápida de saber de publicações novas, inclusive em processos ainda não cadastrados.
-- O horário da janela é o do relógio do computador/servidor onde o programa roda. Num servidor na nuvem, confira o fuso horário
+- O horário de início é o do relógio do computador/servidor onde o programa roda. Num servidor na nuvem, confira o fuso horário
   (muitos vêm em UTC, 3 horas à frente de Brasília) e ajuste o fuso do servidor para America/Sao_Paulo.
 - Desligando a varredura em blocos, o programa volta ao modo clássico (consulta todos os processos a cada intervalo).
 - Alertas: movimentação ou publicação nova aparecem no Painel/Publicações e, se o e-mail estiver ligado, são enviados por bloco.

@@ -39,7 +39,7 @@ def esperar(mon, limite=20):
 class Varredura(Base):
     def setUp(self):
         super().setUp()
-        self.cfg.dados["varredura"].update({"ativa": True, "bloco": 10, "intervalo_min": 30, "inicio": "07:00", "fim": "20:00"})
+        self.cfg.dados["varredura"].update({"ativa": True, "bloco": 10, "intervalo_min": 30, "inicio": "02:00"})
         self.cfg.dados["dje_ativo"] = False
         ApiFalsa.estado["movs"] = [MOV1]
 
@@ -84,10 +84,19 @@ class Varredura(Base):
         self.banco.conn.commit()
         self.assertEqual(self.mon.candidatos_hoje(MANHA), [ids[2], ids[1], ids[0]])
 
-    def test_fora_da_janela_ou_desligada_nao_faz_nada(self):
+    def test_comeca_de_madrugada_e_nao_tem_horario_final(self):
         self.varios(3)
-        self.assertEqual(self.mon.iniciar_bloco_se_devido(dt.datetime(2026, 11, 11, 6, 59)), 0)
-        self.assertEqual(self.mon.iniciar_bloco_se_devido(dt.datetime(2026, 11, 11, 20, 0)), 0)
+        self.assertEqual(self.mon.iniciar_bloco_se_devido(dt.datetime(2026, 11, 11, 1, 59)), 0)   # antes da hora de início
+        self.assertEqual(self.mon.iniciar_bloco_se_devido(dt.datetime(2026, 11, 11, 23, 40)), 3)  # sem fim: roda a qualquer hora depois
+        esperar(self.mon)
+
+    def test_pc_ligado_tarde_recupera_a_varredura_do_dia(self):
+        self.varios(2)  # o PC estava desligado às 02:00; ao ligar às 14:00, a varredura do dia ainda roda
+        self.assertEqual(self.mon.iniciar_bloco_se_devido(dt.datetime(2026, 11, 11, 14, 0)), 2)
+        esperar(self.mon)
+
+    def test_desligada_nao_faz_nada(self):
+        self.varios(3)
         self.cfg.dados["varredura"]["ativa"] = False
         self.assertEqual(self.mon.iniciar_bloco_se_devido(MANHA), 0)
 
@@ -115,17 +124,19 @@ class Varredura(Base):
         self.assertEqual(self.mon.candidatos_hoje(MANHA), [])  # já tentados hoje: o retorno é por backoff, não pelos blocos
         self.assertIn(ids[0], self.mon.proxima)
 
-    def test_resumo_alerta_capacidade(self):
-        self.varios(5)
+    def test_resumo_previsao_de_duracao(self):
+        self.varios(25)
         r = self.mon.resumo_varredura(MANHA)
-        self.assertEqual(r["capacidade_dia"], (13 * 60 // 30) * 10)
-        self.assertEqual((r["ativos"], r["feitos_hoje"], r["restantes"], r["na_janela"]), (5, 0, 5, True))
+        self.assertEqual((r["ativos"], r["feitos_hoje"], r["restantes"], r["na_janela"]), (25, 0, 25, True))
+        self.assertEqual(r["previsao_min"], 3 * 30)    # 25 processos / blocos de 10 = 3 blocos x 30 min
+        self.assertNotIn("fim", r)
 
     def test_config_valida_varredura(self):
-        for ruim in ({"bloco": 5}, {"bloco": 900}, {"intervalo_min": 1}, {"inicio": "25:00"}, {"inicio": "21:00", "fim": "08:00"}):
+        for ruim in ({"bloco": 5}, {"bloco": 900}, {"intervalo_min": 1}, {"inicio": "25:00"}, {"inicio": "2h"}):
             with self.assertRaises(ValueError):
                 self.cfg.atualizar({"varredura": ruim})
-        self.cfg.atualizar({"varredura": {"bloco": 50, "inicio": "06:30"}})
+        self.cfg.atualizar({"varredura": {"bloco": 50, "inicio": "03:30", "fim": "20:00"}})
+        self.assertNotIn("fim", self.cfg.dados["varredura"])
         self.assertEqual(self.cfg.dados["varredura"]["bloco"], 50)
 
 

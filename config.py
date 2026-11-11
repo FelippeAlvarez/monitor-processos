@@ -17,7 +17,7 @@ PADRAO = {
     "dje_ativo": True,
     "dje_base_url": "https://comunicaapi.pje.jus.br",
     # v0.5: varredura diária dos processos em blocos (cada processo consultado 1x por dia, dentro da janela de horário)
-    "varredura": {"ativa": True, "bloco": 100, "intervalo_min": 30, "inicio": "07:00", "fim": "20:00"},
+    "varredura": {"ativa": True, "bloco": 100, "intervalo_min": 10, "inicio": "02:00"},  # começa de madrugada e vai até consultar tudo (sem horário final)
     "pasta_backup": "",          # vazio = <pasta de dados>/backups (pode ser uma pasta do Dropbox)
     "backup_ativo": True,
     "backup_hora": "02:00",
@@ -100,14 +100,12 @@ class Config:
                     nv["intervalo_min"] = int(v["intervalo_min"])
                     if not 5 <= nv["intervalo_min"] <= 240:
                         raise ValueError("O intervalo entre blocos deve ficar entre 5 e 240 minutos.")
-                for campo in ("inicio", "fim"):
-                    if campo in v:
-                        hora = str(v[campo]).strip()
-                        if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", hora):
-                            raise ValueError("Horário da varredura inválido (use HH:MM).")
-                        nv[campo] = hora
-                if nv["inicio"] >= nv["fim"]:
-                    raise ValueError("O horário de início da varredura deve ser anterior ao de fim.")
+                if "inicio" in v:
+                    hora = str(v["inicio"]).strip()
+                    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", hora):
+                        raise ValueError("Horário de início da varredura inválido (use HH:MM).")
+                    nv["inicio"] = hora
+                nv.pop("fim", None)  # versão 0.5.0 tinha horário final; a varredura agora vai até consultar tudo
                 d["varredura"] = nv
             if "pasta_backup" in novo:
                 d["pasta_backup"] = str(novo["pasta_backup"]).strip()[:300]
