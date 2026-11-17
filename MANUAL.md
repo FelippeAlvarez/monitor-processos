@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.5.2)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.5.3)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -224,3 +224,14 @@ Para fazer backup, copie essa pasta. Para apagar tudo, feche o programa e apague
     * Se nenhuma OAB do tipo "OAB" estiver cadastrada na aba Filtros, a automação não faz nada.
     * Na primeira conferência de uma carteira grande, publicações dos últimos 15 dias de processos conferidos contam como novas e podem
       gerar um e-mail único com várias publicações.
+
+22. APARÊNCIA (novo na v0.5.3)
+- Aba "Aparência": cada pessoa escolhe como quer ver o programa. A escolha vale só para o seu usuário, fica guardada no servidor
+  e acompanha você em qualquer aparelho (computador ou celular).
+- Estilo: "Claro" (padrão; visual limpo, letras sem serifa, azul do logotipo, mais compacto para tabelas grandes) ou
+  "Clássico ASA" (fundo creme, letras com serifa e detalhes dourados, no padrão do app ASA Direto).
+- Modo: Automático (segue o aparelho), Claro ou Escuro. Tamanho do texto: Normal ou Grande.
+- O logotipo do escritório está embutido no programa. Para trocá-lo por outro arquivo, é preciso alterar o programa.
+- As confirmações ("Remover processo?", "Parar de monitorar…") agora aparecem em janelas do próprio programa, no lugar das caixas do navegador.
+- Se a escolha não puder ser salva no servidor (ex.: sem conexão), ela continua valendo naquele navegador e a página avisa.
+- Limite: a fonte do estilo Clássico (serifada) depende de estar instalada no aparelho; se não estiver, o navegador usa uma serifada comum.

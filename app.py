@@ -322,7 +322,7 @@ def r_email_teste(h):
 # ---------------------------------------------------------------- sessão, usuários, auditoria, backup
 def _usuario_json(u):
     return {"id": u["id"], "usuario": u["usuario"], "nome": u["nome"], "email": u["email"], "perfil": u["perfil"],
-            "trocar_senha": bool(u["trocar_senha"])}
+            "trocar_senha": bool(u["trocar_senha"]), "aparencia": auth.aparencia_de_texto(u.get("aparencia"))}
 
 
 def r_sessao(h):
@@ -367,6 +367,16 @@ def r_logout(h):
     CTX.auth.encerrar_sessao(h.token())
     h.cookies_extra.append(f"{COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict" + h.sufixo_seguro())
     h.json({"ok": True})
+
+
+def r_aparencia(h):
+    """Cada usuário escolhe o próprio estilo, modo (claro/escuro) e tamanho do texto."""
+    c = h.corpo()
+    try:
+        CTX.auth.definir_aparencia(h.usuario["id"], c.get("estilo"), c.get("modo"), c.get("tam"))
+    except auth.ErroAuth as e:
+        return h.json({"erro": str(e)}, 400)
+    h.json({"ok": True, "aparencia": CTX.auth.aparencia(h.usuario["id"])})
 
 
 def r_senha_propria(h):
@@ -566,6 +576,7 @@ ROTAS = [
     ("POST", r"/api/login", r_login, "pub"),
     ("POST", r"/api/logout", r_logout, "usu"),
     ("POST", r"/api/senha", r_senha_propria, "usu"),
+    ("POST", r"/api/aparencia", r_aparencia, "usu"),
     ("GET", r"/api/status", r_status, "usu"),
     ("GET", r"/api/publicacoes", r_publicacoes, "usu"),
     ("POST", r"/api/publicacoes/visto", r_pub_visto, "usu"),

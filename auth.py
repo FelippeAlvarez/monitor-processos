@@ -4,6 +4,7 @@ Só biblioteca padrão. Senhas com scrypt (hashlib) e sal individual; nunca são
 As sessões guardam apenas o hash (SHA-256) do token; o token em si só existe no cookie do navegador.
 """
 import hashlib
+import json
 import hmac
 import re
 import secrets
@@ -56,6 +57,23 @@ CREATE INDEX IF NOT EXISTS ix_auditoria_id ON auditoria(id DESC);
 """
 
 
+APARENCIA_ESTILOS = ("claro", "classico")
+APARENCIA_MODOS = ("auto", "light", "dark")
+APARENCIA_TAMANHOS = ("normal", "grande")
+
+
+def aparencia_de_texto(txt):
+    """Lê a preferência guardada; qualquer coisa fora do esperado vira {} (o programa usa os padrões)."""
+    try:
+        d = json.loads(txt or "")
+    except ValueError:
+        return {}
+    if (isinstance(d, dict) and d.get("estilo") in APARENCIA_ESTILOS and d.get("modo") in APARENCIA_MODOS
+            and d.get("tam") in APARENCIA_TAMANHOS):
+        return {"estilo": d["estilo"], "modo": d["modo"], "tam": d["tam"]}
+    return {}
+
+
 class ErroAuth(ValueError):
     """Erro de validação com mensagem própria para o usuário."""
 
@@ -97,7 +115,8 @@ def validar_senha(senha, usuario=""):
 
 def _publico(u):
     return {k: u[k] for k in ("id", "usuario", "nome", "email", "perfil", "ativo", "trocar_senha", "criado_em",
-                              "ultimo_acesso")} | {"bloqueado": u["bloqueado_ate"] > time.time()}
+                              "ultimo_acesso")} | {"bloqueado": u["bloqueado_ate"] > time.time(),
+                                                  "aparencia": u.get("aparencia", "")}
 
 
 class Auth:
@@ -108,7 +127,24 @@ class Auth:
         self._ip_lock = threading.Lock()
         with self.lock:
             banco.conn.executescript(SCHEMA_AUTH)
+            cols = {r["name"] for r in banco.conn.execute("PRAGMA table_info(usuarios)").fetchall()}
+            if "aparencia" not in cols:  # v0.5.3: preferência visual de cada usuário
+                banco.conn.execute("ALTER TABLE usuarios ADD COLUMN aparencia TEXT NOT NULL DEFAULT ''")
             banco.conn.commit()
+
+    # ------------------------------------------------------------ aparência (v0.5.3)
+    def aparencia(self, uid):
+        """Preferência visual do usuário ({} se ainda não escolheu)."""
+        u = self._um("SELECT aparencia FROM usuarios WHERE id=?", (uid,))
+        return aparencia_de_texto(u["aparencia"]) if u else {}
+
+    def definir_aparencia(self, uid, estilo, modo, tam):
+        if estilo not in APARENCIA_ESTILOS or modo not in APARENCIA_MODOS or tam not in APARENCIA_TAMANHOS:
+            raise ErroAuth("Opção de aparência inválida.")
+        valor = json.dumps({"estilo": estilo, "modo": modo, "tam": tam})
+        with self.lock:
+            self.banco.conn.execute("UPDATE usuarios SET aparencia=? WHERE id=?", (valor, uid))
+            self.banco.conn.commit()
 
     # ------------------------------------------------------------ consultas
     def _um(self, sql, args=()):

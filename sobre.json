@@ -1,6 +1,6 @@
 {
   "nome": "Monitor de Processos",
-  "versao": "0.5.2",
+  "versao": "0.5.3",
   "titular": "Felippe Alvarez de Sá",
   "ano": 2026,
   "licenca": "Proprietária — todos os direitos reservados (arquivo LICENSE)",
@@ -8,6 +8,7 @@
   "creditos": [
     "Dados: API Pública do DataJud — Conselho Nacional de Justiça (CNJ)",
     "Publicações: DJEN – Diário de Justiça Eletrônico Nacional, via API Comunica PJe — CNJ",
+    "Identidade visual (logotipo e cores): Alvarez de Sá Advocacia",
     "Desenvolvido com auxílio do Claude (Anthropic)",
     "Construído apenas com a biblioteca padrão do Python"
   ],

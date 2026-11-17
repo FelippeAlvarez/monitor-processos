@@ -1,65 +1,122 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="pt-BR" data-estilo="claro" data-modo="light" data-tam="normal">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Monitor de Processos</title>
 <style>
-  :root { --bg:#f5f6f8; --card:#fff; --tx:#1c2430; --mut:#667085; --bd:#e1e5ea; --ac:#1f4e79; --ok:#18794e; --warn:#b54708; --err:#b42318; --new:#d92d20; }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg:#12161c; --card:#1b212a; --tx:#e7ebf0; --mut:#98a2b3; --bd:#2c3440; --ac:#6ba6dd; --ok:#4cc38a; --warn:#f0a33c; --err:#f97066; --new:#f97066; }
-  }
+  /* ===== tokens: estilo (claro | classico) x modo (light | dark) ===== */
+  :root { --bg:#f3f5f8; --card:#fff; --tx:#1b2433; --mut:#5b6578; --bd:#e1e5ec; --ac:#1f5f98; --btn:#1f5f98; --ok:#1d6b47; --warn:#94600a; --err:#a8332a; --new:#c0392b;
+          --hd:#fff; --hd-tx:#1b2433; --hd-bd:#e1e5ec; --gold:#2f77b8; --av-bg:#e1edf9; --av-tx:#1d5fa8; --rad:12px; --rb:9px;
+          --fonte:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; --tam:15px; color-scheme:light; }
+  html[data-modo="dark"] { --bg:#0b1119; --card:#131b27; --tx:#e8ecf5; --mut:#a6aca9; --bd:#2b3646; --ac:#7db4e6; --btn:#1d5a8a; --ok:#5fc796; --warn:#f0b758; --err:#ff8f86; --new:#ff8f86;
+          --hd:#000; --hd-tx:#fff; --hd-bd:#2b3646; --gold:#6aaee6; --av-bg:#13273f; --av-tx:#8fbbe0; color-scheme:dark; }
+  html[data-estilo="classico"] { --bg:#fbfaf5; --card:#fffefb; --tx:#232b2e; --mut:#5f6664; --bd:#d9cfbb; --ac:#0a2f4c; --btn:#0a2f4c; --ok:#1d6b47; --warn:#94600a; --err:#a8332a;
+          --hd:#101319; --hd-tx:#fff; --hd-bd:#c7a160; --gold:#c7a160; --av-bg:#f6efdf; --av-tx:#6b5530; --rad:18px; --rb:999px;
+          --fonte:"Noto Serif","Source Serif 4",Georgia,"Times New Roman",serif; }
+  html[data-estilo="classico"][data-modo="dark"] { --bg:#0b1119; --card:#131b27; --tx:#ece8dd; --mut:#a6aca9; --bd:#2b3646; --ac:#d4b070; --btn:#1d5a8a; --hd:#000; --hd-bd:#d4b070; --gold:#d4b070; --av-bg:#2a2314; --av-tx:#d4b070; }
+  html[data-tam="grande"] { --tam:17px; }
   * { box-sizing: border-box; }
-  body { margin:0; font:15px/1.45 system-ui, "Segoe UI", sans-serif; background:var(--bg); color:var(--tx); }
-  header { background:var(--ac); color:#fff; padding:12px 20px; }
-  header h1 { margin:0; font-size:18px; }
-  .aviso { background:#fff4e5; color:#7a4a00; padding:8px 20px; font-size:13px; border-bottom:1px solid #f0d9b5; }
-  @media (prefers-color-scheme: dark) { .aviso { background:#3a2a10; color:#f3cf94; border-color:#5a4220; } }
-  nav { display:flex; gap:4px; padding:10px 20px 0; flex-wrap:wrap; }
-  nav button { border:0; background:transparent; color:var(--mut); padding:8px 14px; cursor:pointer; font:inherit; border-bottom:2px solid transparent; }
-  nav button.on { color:var(--ac); border-color:var(--ac); font-weight:600; }
-  main { padding:16px 20px 40px; max-width:1100px; margin:0 auto; }
-  .card { background:var(--card); border:1px solid var(--bd); border-radius:10px; padding:14px 16px; margin-bottom:14px; }
+  body { margin:0; font:var(--tam)/1.45 var(--fonte); background:var(--bg); color:var(--tx); }
+  .num { font-family:ui-monospace, Consolas, monospace; font-size:13px; white-space:nowrap; }
+  /* cabeçalho */
+  header { background:var(--hd); color:var(--hd-tx); padding:8px 20px; border-bottom:1px solid var(--hd-bd); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  html[data-estilo="classico"] header { border-bottom:4px solid var(--gold); }
+  header .marca { display:flex; align-items:center; gap:14px; }
+  header h1 { margin:0; font-size:16px; font-weight:600; }
+  header h1 .mut { color:inherit; opacity:.65; font-weight:400; }
+  .lg { height:40px; width:auto; display:block; mix-blend-mode:lighten; }
+  html[data-modo="light"]:not([data-estilo="classico"]) .lg { filter:invert(1) hue-rotate(180deg); mix-blend-mode:multiply; }
+  .sep { width:1px; height:28px; background:currentColor; opacity:.25; }
+  header .usr { font-size:13px; display:flex; gap:8px; align-items:center; }
+  header .usr button { background:transparent; color:inherit; border:1px solid currentColor; opacity:.85; border-radius:var(--rb); padding:3px 12px; cursor:pointer; font:inherit; font-size:13px; }
+  header .usr button:hover { opacity:1; }
+  .av { width:30px; height:30px; border-radius:50%; background:var(--av-bg); color:var(--av-tx); display:grid; place-items:center; font-weight:700; font-size:12px; border:1px solid var(--gold); }
+  .aviso { background:#e1edf9; color:#1d5fa8; padding:7px 20px; font-size:12.5px; border-bottom:1px solid var(--bd); }
+  html[data-estilo="classico"] .aviso { background:#f6efdf; color:#6b5530; }
+  html[data-modo="dark"] .aviso { background:#13273f; color:#8fbbe0; }
+  html[data-estilo="classico"][data-modo="dark"] .aviso { background:#2a2314; color:#d4b070; }
+  nav { display:flex; gap:2px; padding:10px 20px 0; flex-wrap:wrap; border-bottom:1px solid var(--bd); background:var(--card); }
+  nav button { border:0; background:transparent; color:var(--mut); padding:9px 14px; cursor:pointer; font:inherit; border-bottom:3px solid transparent; margin-bottom:-1px; }
+  nav button:hover { color:var(--tx); }
+  nav button.on { color:var(--ac); border-color:var(--gold); font-weight:600; }
+  main { padding:18px 20px 40px; max-width:1100px; margin:0 auto; }
+  .card { background:var(--card); border:1px solid var(--bd); border-radius:var(--rad); padding:14px 16px; margin-bottom:14px; box-shadow:0 1px 2px rgba(20,25,35,.04); }
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:14px; }
   .cards .card { margin:0; } .cards b { display:block; font-size:24px; }
-  button.b { background:var(--ac); color:#fff; border:0; border-radius:7px; padding:8px 14px; cursor:pointer; font:inherit; }
-  button.b.sec { background:transparent; color:var(--ac); border:1px solid var(--ac); }
-  button.b.dg { background:transparent; color:var(--err); border:1px solid var(--err); }
+  .cards .card.dest { border-left:4px solid var(--c); } .cards .card.dest b { font-size:30px; }
+  .d-info { --c:var(--ac); } .d-warn { --c:var(--warn); } .d-err { --c:var(--err); } .d-ok { --c:var(--ok); }
+  /* botões */
+  button.b { background:var(--btn); color:#fff; border:1px solid var(--btn); border-radius:var(--rb); padding:8px 16px; cursor:pointer; font:inherit; }
+  button.b:hover { filter:brightness(1.12); }
+  button.b.sec { background:transparent; color:var(--ac); border:1px solid var(--bd); }
+  button.b.sec:hover { background:color-mix(in srgb,var(--ac) 8%,transparent); border-color:var(--ac); }
+  button.b.dg { background:transparent; color:var(--err); border:1px solid color-mix(in srgb,var(--err) 45%,transparent); }
+  button.b.dg:hover { background:color-mix(in srgb,var(--err) 10%,transparent); }
   button.b:disabled { opacity:.5; cursor:default; }
-  button.sm { padding:3px 9px; font-size:13px; }
+  button.sm { padding:3px 11px; font-size:13px; }
+  /* tabelas e etiquetas */
   table { width:100%; border-collapse:collapse; }
-  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--bd); vertical-align:top; }
-  th { color:var(--mut); font-weight:600; font-size:13px; }
+  th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--bd); vertical-align:top; }
+  th { color:var(--mut); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+  tbody tr:hover td { background:color-mix(in srgb,var(--ac) 4%,transparent); }
   .badge { display:inline-block; background:var(--new); color:#fff; border-radius:10px; padding:0 8px; font-size:12px; font-weight:600; }
   .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--err); } .mut { color:var(--mut); font-size:13px; }
-  .num { font-family:ui-monospace, Consolas, monospace; font-size:13px; white-space:nowrap; }
-  input, textarea { width:100%; padding:8px; border:1px solid var(--bd); border-radius:7px; font:inherit; background:var(--bg); color:var(--tx); }
+  .st { display:inline-block; padding:1px 10px; border-radius:99px; font-size:12.5px; font-weight:500; background:color-mix(in srgb,var(--mut) 14%,transparent); }
+  .st.ok { background:color-mix(in srgb,var(--ok) 15%,transparent); } .st.warn { background:color-mix(in srgb,var(--warn) 16%,transparent); } .st.err { background:color-mix(in srgb,var(--err) 14%,transparent); }
+  .tag { display:inline-block; border:1px solid var(--warn); color:var(--warn); border-radius:10px; padding:0 8px; font-size:12px; }
+  input, textarea, select { width:100%; padding:8px 10px; border:1px solid var(--bd); border-radius:calc(var(--rb) > 20px ? 20px : var(--rb)); font:inherit; background:var(--bg); color:var(--tx); }
+  select { width:auto; } input[type=checkbox], input[type=radio] { width:auto; }
+  input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible { outline:2px solid var(--gold); outline-offset:1px; }
   label { display:block; margin:10px 0 4px; font-weight:600; font-size:13px; }
   .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; } @media (max-width:640px) { .grid2 { grid-template-columns:1fr; } }
   .mov td { font-size:13px; } .mov tr.n td { background:rgba(217,45,32,.08); }
   .acoes { display:flex; gap:6px; flex-wrap:wrap; }
   pre.doc { white-space:pre-wrap; font:13px/1.5 ui-monospace, Consolas, monospace; background:var(--bg); padding:12px; border-radius:8px; max-height:420px; overflow:auto; }
   .hide { display:none; }
-  .pub { border:1px solid var(--bd); border-radius:8px; padding:10px 12px; margin-bottom:10px; }
+  .pub { border:1px solid var(--bd); border-radius:calc(var(--rad) - 4px); padding:10px 12px; margin-bottom:10px; background:var(--card); }
   .pub.n { border-left:4px solid var(--new); }
   .pub.c { opacity:.6; }
   .pub .tx { white-space:pre-wrap; margin-top:8px; font-size:14px; max-height:none; }
-  .tag { display:inline-block; border:1px solid var(--warn); color:var(--warn); border-radius:10px; padding:0 8px; font-size:12px; }
-  header { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-  header .usr { font-size:13px; display:flex; gap:8px; align-items:center; }
-  header .usr button { background:rgba(255,255,255,.15); color:#fff; border:1px solid rgba(255,255,255,.4); border-radius:6px; padding:3px 10px; cursor:pointer; font:inherit; font-size:13px; }
   body:not(.adm) .so-adm { display:none !important; }
   #login { position:fixed; inset:0; background:var(--bg); z-index:50; display:flex; align-items:flex-start; justify-content:center; padding:40px 16px; overflow:auto; }
   #login .card { width:100%; max-width:380px; }
+  #login .topo { background:var(--hd); margin:-14px -16px 14px; padding:14px 16px; border-radius:var(--rad) var(--rad) 0 0; border-bottom:1px solid var(--hd-bd); }
+  html[data-estilo="classico"] #login .topo { border-bottom:4px solid var(--gold); }
   #login.hide { display:none; }
-  dialog { border:1px solid var(--bd); border-radius:10px; background:var(--card); color:var(--tx); max-width:420px; width:calc(100% - 32px); }
-  dialog::backdrop { background:rgba(0,0,0,.5); }
-  select { padding:8px; border:1px solid var(--bd); border-radius:7px; font:inherit; background:var(--bg); color:var(--tx); }
-  #msg { position:fixed; bottom:16px; right:16px; background:var(--tx); color:var(--bg); padding:10px 14px; border-radius:8px; max-width:380px; display:none; }
+  /* diálogos próprios */
+  dialog { border:1px solid var(--bd); border-radius:var(--rad); background:var(--card); color:var(--tx); max-width:440px; width:calc(100% - 32px); box-shadow:0 16px 48px rgba(10,15,35,.35); }
+  dialog::backdrop { background:rgba(10,15,25,.55); }
+  #d-conf p { white-space:pre-wrap; margin:0 0 12px; }
+  #msg { position:fixed; bottom:16px; right:16px; background:var(--tx); color:var(--bg); padding:10px 14px; border-radius:10px; max-width:380px; display:none; box-shadow:0 8px 24px rgba(10,15,35,.3); }
+  /* tela Aparência */
+  .opts { display:grid; grid-template-columns:1fr 1fr; gap:14px; } @media (max-width:640px) { .opts { grid-template-columns:1fr; } }
+  .opt { all:unset; box-sizing:border-box; cursor:pointer; display:block; background:var(--card); border:2px solid var(--bd); border-radius:var(--rad); padding:12px; font:inherit; color:var(--tx); }
+  .opt:hover { border-color:var(--mut); } .opt[aria-checked="true"] { border-color:var(--gold); }
+  .opt .tt { display:flex; align-items:center; gap:8px; margin:10px 0 2px; font-weight:600; }
+  .opt .ck { margin-left:auto; width:20px; height:20px; border-radius:50%; border:2px solid var(--bd); display:grid; place-items:center; font-size:12px; color:#fff; }
+  .opt[aria-checked="true"] .ck { background:var(--gold); border-color:var(--gold); } .opt[aria-checked="true"] .ck::after { content:"✓"; }
+  .pv { height:110px; border-radius:8px; overflow:hidden; border:1px solid #d9cfbb; }
+  .pv .ph { height:30px; display:flex; align-items:center; padding:0 10px; } .pv .ph img { height:16px; display:block; }
+  .pv .pb { padding:10px; font-size:12px; } .pv .bt { display:inline-block; color:#fff; padding:3px 12px; margin-top:6px; }
+  .pv.c { background:#fbfaf5; font-family:Georgia,serif; } .pv.c .ph { background:#101319; border-bottom:3px solid #c7a160; } .pv.c .ph img { filter:none !important; mix-blend-mode:lighten; } .pv.c .bt { background:#0a2f4c; border-radius:99px; }
+  .pv.l { background:#f3f5f8; border-color:#e1e5ec; font-family:Arial,sans-serif; } .pv.l .ph { background:#fff; border-bottom:1px solid #e1e5ec; } .pv.l .ph img { filter:invert(1) hue-rotate(180deg) !important; mix-blend-mode:multiply; } .pv.l .bt { background:#1f5f98; border-radius:7px; }
+  .seg { display:inline-flex; gap:4px; background:color-mix(in srgb,var(--mut) 14%,transparent); border-radius:calc(var(--rb) > 14px ? 14px : var(--rb)); padding:4px; }
+  .seg button { border:0; background:none; padding:7px 16px; border-radius:calc(var(--rb) > 12px ? 12px : var(--rb)); cursor:pointer; color:var(--mut); font:inherit; }
+  .seg button[aria-checked="true"] { background:var(--card); color:var(--tx); font-weight:600; box-shadow:0 1px 3px rgba(0,0,0,.2); }
 </style>
+<script>
+(function () { // aplica a última escolha deste navegador antes de desenhar a página (a oficial vem do servidor, após o login)
+  try { var a = JSON.parse(localStorage.getItem("aparencia") || "{}"), r = document.documentElement;
+    if (a.estilo) r.dataset.estilo = a.estilo; if (a.tam) r.dataset.tam = a.tam;
+    r.dataset.modo = a.modo === "dark" || (a.modo !== "light" && window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+  } catch (e) {}
+})();
+</script>
 </head>
 <body>
 <div id="login" class="hide"><div class="card">
+  <div class="topo"><img class="lg" alt="ASA — Alvarez de Sá Advocacia"></div>
   <h2 style="margin-top:0">Monitor de Processos</h2>
   <div id="l-setup" class="hide"><p><b>Primeiro acesso.</b> Crie o administrador. O código de configuração aparece na janela preta do programa
     (ou no log do servidor).</p>
@@ -86,6 +143,12 @@
   <p class="err" id="p-erro"></p>
   <div class="acoes"><button class="b" type="button" id="b-senha-ok">Salvar</button><button class="b sec" type="button" id="b-senha-x">Cancelar</button></div>
 </form></dialog>
+<dialog id="d-conf"><form method="dialog">
+  <h3 style="margin-top:0" id="dc-tit">Confirmar</h3>
+  <p id="dc-txt"></p>
+  <input id="dc-inp" class="hide" autocomplete="off">
+  <div class="acoes" style="margin-top:12px"><button class="b" type="button" id="dc-ok">Confirmar</button><button class="b sec" type="button" id="dc-x">Cancelar</button></div>
+</form></dialog>
 <dialog id="d-mon"><form method="dialog">
   <h3 style="margin-top:0" id="dm-tit">Monitorar diariamente</h3>
   <p class="mut" id="dm-txt"></p>
@@ -93,8 +156,8 @@
   <label for="dm-obs">Observação (opcional)</label><input id="dm-obs" maxlength="120">
   <div class="acoes" style="margin-top:12px"><button class="b" type="button" id="dm-ok">Monitorar</button><button class="b sec" type="button" id="dm-x">Cancelar</button></div>
 </form></dialog>
-<header><h1>Monitor de Processos <span class="mut" style="color:#cfe0f2" id="ver"></span></h1>
-  <div class="usr hide" id="usr"><span id="usr-nome"></span><button id="b-conta">Alterar senha</button><button id="b-sair">Sair</button></div></header>
+<header><div class="marca"><img class="lg" alt="ASA — Alvarez de Sá Advocacia"><span class="sep"></span><h1>Monitor de Processos <span class="mut" id="ver"></span></h1></div>
+  <div class="usr hide" id="usr"><span class="av" id="usr-av"></span><span id="usr-nome"></span><button id="b-conta">Alterar senha</button><button id="b-sair">Sair</button></div></header>
 <div class="aviso"><b>Atenção:</b> movimentações vêm do DataJud (metadados, com defasagem) e publicações do DJEN (Comunica PJe).
 Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, as intimações oficiais nem o controle de prazos.</b></div>
 <nav id="nav">
@@ -104,6 +167,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   <button data-t="adicionar">Adicionar</button>
   <button data-t="equipe" class="so-adm">Equipe</button>
   <button data-t="config" class="so-adm">Configurações</button>
+  <button data-t="aparencia">Aparência</button>
   <button data-t="sobre">Sobre</button>
 </nav>
 <main>
@@ -111,16 +175,16 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   <div class="cards">
     <div class="card"><span class="mut">Processos</span><b id="c-total">0</b></div>
     <div class="card"><span class="mut">Monitorados (consulta diária)</span><b id="c-mon">0</b></div>
-    <div class="card"><span class="mut">Avisos</span><b id="c-avisos">0</b></div>
-    <div class="card"><span class="mut">Com novidades</span><b id="c-novos">0</b></div>
-    <div class="card"><span class="mut">Publicações novas (DJEN)</span><b id="c-pubs">0</b></div>
+    <div class="card dest d-warn"><span class="mut">Avisos</span><b id="c-avisos">0</b></div>
+    <div class="card dest d-ok"><span class="mut">Com novidades</span><b id="c-novos">0</b></div>
+    <div class="card dest d-info"><span class="mut">Publicações novas (DJEN)</span><b id="c-pubs">0</b></div>
     <div class="card"><span class="mut">Publicações novas (filtros)</span><b id="c-oab">0</b></div>
-    <div class="card"><span class="mut">Com erro</span><b id="c-erros">0</b></div>
+    <div class="card dest d-err"><span class="mut">Com erro</span><b id="c-erros">0</b></div>
     <div class="card"><span class="mut">Não constam no DataJud</span><b id="c-nao">0</b></div>
     <div class="card"><span class="mut">Última consulta</span><b id="c-ult" style="font-size:15px">—</b></div>
   </div>
   <div class="card hide" id="vr-card"><b>Varredura diária</b> <span class="mut" id="vr-txt"></span>
-    <div style="background:var(--bd);border-radius:6px;height:8px;margin-top:8px"><div id="vr-barra" style="background:var(--ok);height:8px;border-radius:6px;width:0"></div></div>
+    <div style="background:var(--bd);border-radius:99px;height:9px;margin-top:8px"><div id="vr-barra" style="background:linear-gradient(90deg,var(--btn),var(--gold));height:9px;border-radius:99px;width:0"></div></div>
     <p class="warn hide" id="vr-aviso" style="font-size:13px;margin:8px 0 0"></p></div>
   <div class="acoes" style="margin-bottom:12px">
     <button class="b" id="b-consultar">Consultar monitorados agora</button>
@@ -310,6 +374,30 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   </div>
 </section>
 
+<section id="t-aparencia" class="hide">
+  <div class="card">
+    <b>Aparência</b>
+    <p class="mut">Cada pessoa escolhe como quer ver o programa. A escolha vale só para o seu usuário e acompanha você em qualquer aparelho.</p>
+    <label>Estilo</label>
+    <div class="opts" role="radiogroup" aria-label="Estilo">
+      <button class="opt" role="radio" data-estilo="claro" aria-checked="false">
+        <div class="pv l"><div class="ph"><img class="lg" alt=""></div><div class="pb"><b>Painel</b><br><span class="bt">Consultar agora</span></div></div>
+        <div class="tt">Claro<span class="ck"></span></div><span class="mut">Visual limpo e neutro, letras sem serifa e azul do logotipo. Mais compacto para tabelas grandes.</span>
+      </button>
+      <button class="opt" role="radio" data-estilo="classico" aria-checked="false">
+        <div class="pv c"><div class="ph"><img class="lg" alt=""></div><div class="pb"><b>Painel</b><br><span class="bt">Consultar agora</span></div></div>
+        <div class="tt">Clássico ASA<span class="ck"></span></div><span class="mut">Mesmo padrão do ASA Direto: fundo creme, letras com serifa e detalhes dourados.</span>
+      </button>
+    </div>
+    <label>Modo</label>
+    <div class="seg" role="radiogroup" aria-label="Modo"><button role="radio" data-modo="auto">Automático</button><button role="radio" data-modo="light">Claro</button><button role="radio" data-modo="dark">Escuro</button></div>
+    <p class="mut" style="margin:6px 0 0">“Automático” segue a configuração do aparelho.</p>
+    <label>Tamanho do texto</label>
+    <div class="seg" role="radiogroup" aria-label="Tamanho do texto"><button role="radio" data-tam="normal">Normal</button><button role="radio" data-tam="grande">Grande</button></div>
+    <p class="mut" id="ap-msg" style="margin:10px 0 0"></p>
+  </div>
+</section>
+
 <section id="t-sobre" class="hide">
   <div class="card" id="sobre-info"></div>
   <div class="card">
@@ -341,6 +429,50 @@ function fmt(s) { // formata sem converter fuso (o tribunal envia horário local
   return m ? `${m[3]}/${m[2]}/${m[1]}` + (m[4] ? ` ${m[4]}:${m[5]}` : "") : (s || "—");
 }
 function fmtUtc(s) { return s ? new Date(s).toLocaleString("pt-BR") : "—"; }
+
+
+// ---- identidade visual: logotipo do escritório (embutido, sem depender de arquivo externo)
+const LOGO = "data:image/jpeg;base64,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";
+document.querySelectorAll("img.lg").forEach(i => i.src = LOGO);
+
+// ---- diálogos próprios (no lugar de confirm/prompt do navegador)
+const dConf = $("#d-conf");
+function dialogo({ titulo, texto, ok = "Confirmar", perigo = false, campo = null, padrao = "" }) {
+  return new Promise(resolve => {
+    $("#dc-tit").textContent = titulo; $("#dc-txt").textContent = texto;
+    const inp = $("#dc-inp"); inp.classList.toggle("hide", campo === null); inp.value = padrao; inp.type = campo || "text";
+    const bt = $("#dc-ok"); bt.textContent = ok; bt.classList.toggle("dg", perigo); bt.classList.toggle("b", true);
+    const fim = (v) => { dConf.close(); resolve(v); };
+    bt.onclick = () => fim(campo === null ? true : inp.value);
+    $("#dc-x").onclick = () => fim(campo === null ? false : null);
+    dConf.oncancel = (e) => { e.preventDefault(); fim(campo === null ? false : null); };
+    inp.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); bt.click(); } };
+    dConf.showModal(); if (campo !== null) { inp.focus(); inp.select(); } else bt.focus();
+  });
+}
+const confirmar = (texto, o = {}) => dialogo({ titulo: o.titulo || "Confirmar", texto, ok: o.ok || "Confirmar", perigo: !!o.perigo });
+const perguntar = (texto, padrao = "", o = {}) => dialogo({ titulo: o.titulo || "Informe", texto, ok: o.ok || "OK", campo: o.senha ? "password" : "text", padrao });
+
+// ---- aparência (preferência de cada usuário: servidor; cópia local só para o primeiro desenho e a tela de login)
+let APAR = { estilo: "claro", modo: "auto", tam: "normal" };
+try { const l = JSON.parse(localStorage.getItem("aparencia") || "{}"); if (l.estilo) APAR = { ...APAR, ...l }; } catch (e) {}
+function aplicarAparencia() {
+  const r = document.documentElement, auto = window.matchMedia && matchMedia("(prefers-color-scheme: dark)").matches;
+  r.dataset.estilo = APAR.estilo; r.dataset.tam = APAR.tam; r.dataset.modo = APAR.modo === "auto" ? (auto ? "dark" : "light") : APAR.modo;
+  document.querySelectorAll("[data-estilo]:not(html)").forEach(b => b.setAttribute("aria-checked", b.dataset.estilo === APAR.estilo));
+  document.querySelectorAll("[data-modo]:not(html)").forEach(b => b.setAttribute("aria-checked", b.dataset.modo === APAR.modo));
+  document.querySelectorAll("[data-tam]:not(html)").forEach(b => b.setAttribute("aria-checked", b.dataset.tam === APAR.tam));
+  try { localStorage.setItem("aparencia", JSON.stringify(APAR)); } catch (e) {}
+}
+if (window.matchMedia) matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (APAR.modo === "auto") aplicarAparencia(); });
+$("#t-aparencia").onclick = async (e) => {
+  const b = e.target.closest("button[role=radio]"); if (!b) return;
+  if (b.dataset.estilo) APAR.estilo = b.dataset.estilo; if (b.dataset.modo) APAR.modo = b.dataset.modo; if (b.dataset.tam) APAR.tam = b.dataset.tam;
+  aplicarAparencia();
+  try { await api("/api/aparencia", "POST", APAR); $("#ap-msg").textContent = "Escolha salva no seu usuário."; }
+  catch (er) { $("#ap-msg").textContent = "Não foi possível salvar no servidor: " + er.message; }
+};
+aplicarAparencia();
 
 // abas
 document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
@@ -408,7 +540,7 @@ function renderLista() {
         <span class="num">${esc(p.numero)}</span>${p.motivo_obs ? ` <span class="mut">— ${esc(p.motivo_obs)}</span>` : ""}${oab}${avisoHtml}${p.cliente || p.pasta ? `<br><span class="mut">${esc(p.cliente)}${p.pasta ? " · pasta " + esc(p.pasta) : ""}</span>` : ""}</td>
       <td>${esc(p.ultimo_mov || "—")}<br><span class="mut">${fmt(p.ultimo_mov_data)}${p.classe ? " · " + esc(p.classe) : ""}</span>
         ${p.ultima_atualizacao ? `<br><span class="mut">registro do CNJ atualizado em ${fmt(p.ultima_atualizacao)}</span>` : ""}</td>
-      <td><span class="${cls}">${txt}</span>${p.mensagem ? `<br><span class="mut">${esc(p.mensagem)}</span>` : ""}<br>${p.ultima_consulta ? `<br><span class="mut">consultado: ${fmtUtc(p.ultima_consulta)}</span>` : ""}
+      <td><span class="st ${cls}">${txt}</span>${p.mensagem ? `<br><span class="mut">${esc(p.mensagem)}</span>` : ""}<br>${p.ultima_consulta ? `<br><span class="mut">consultado: ${fmtUtc(p.ultima_consulta)}</span>` : ""}
         <br><span class="mut">DJEN: ${DJE[p.dje_status] || "—"}${p.pub_total ? ` · ${p.pub_total} publ.${p.pub_ultima ? ", última em " + fmt(p.pub_ultima) : ""}` : ""}</span>${p.dje_status === "erro" && p.dje_mensagem ? `<br><span class="err" style="font-size:13px">${esc(p.dje_mensagem)}</span>` : ""}</td>
       <td><div class="acoes">
         <button class="b sm sec" data-ver="${p.id}">Movimentos</button>
@@ -445,16 +577,16 @@ $("#b-mon-lote").onclick = async () => {
 $("#b-desmon-lote").onclick = async () => {
   const ids = FILTRADOS.filter(p => p.ativo && p.monitorar).map(p => p.id);
   if (!ids.length) { aviso("Nenhum processo monitorado na lista atual."); return; }
-  if (!confirm(`Parar de monitorar diariamente ${ids.length} processo(s)? Eles continuam cadastrados e recebem as publicações pelo filtro de OAB; a automação não os incluirá de novo.`)) return;
+  if (!await confirmar(`Parar de monitorar diariamente ${ids.length} processo(s)? Eles continuam cadastrados e recebem as publicações pelo filtro de OAB; a automação não os incluirá de novo.`, { titulo: "Parar de monitorar", ok: "Parar de monitorar" })) return;
   try { const r = await api("/api/processos/monitorar", "POST", { ids, monitorar: false }); aviso(`${r.alterados} processo(s) fora do monitoramento diário.`); carregarLista(); } catch (e) { aviso(e.message); }
 };
 $("#b-inativos").onclick = async () => {
   try {
-    const m = prompt("Arquivar os processos sem NENHUMA movimentação nem publicação há mais de quantos meses?", "12");
+    const m = await perguntar("Arquivar os processos sem NENHUMA movimentação nem publicação há mais de quantos meses?", "12", { titulo: "Arquivar parados" });
     if (!m) return;
     const r = await api("/api/processos/inativos", "POST", { meses: Number(m), simular: true });
     if (!r.total) { aviso("Nenhum processo parado há mais de " + m + " meses."); return; }
-    if (!confirm(`${r.total} processo(s) estão sem andamento desde antes de ${fmt(r.corte)} (ex.: ${r.amostra.slice(0, 3).join(", ")}).\n\nArquivar? Eles deixam de ser consultados, mas não são apagados e podem ser reativados. Se voltarem a aparecer numa publicação dos filtros, você é avisado.`)) return;
+    if (!await confirmar(`${r.total} processo(s) estão sem andamento desde antes de ${fmt(r.corte)} (ex.: ${r.amostra.slice(0, 3).join(", ")}).\n\nArquivar? Eles deixam de ser consultados, mas não são apagados e podem ser reativados. Se voltarem a aparecer numa publicação dos filtros, você é avisado.`)) return;
     const f = await api("/api/processos/inativos", "POST", { meses: Number(m), simular: false });
     aviso(f.arquivados + " processo(s) arquivado(s)."); carregarLista();
   } catch (e) { aviso(e.message); }
@@ -470,7 +602,7 @@ $("#lista").onclick = async (e) => {
     }
     if (b.dataset.upd) { await api(`/api/processos/${b.dataset.upd}/consultar`, "POST", {}); aviso("Processo colocado na fila de consulta."); status(); }
     if (b.dataset.arq) { await api("/api/processos/ativo", "POST", { ids: [Number(b.dataset.arq)], ativo: b.dataset.a === "1" }); carregarLista(); }
-    if (b.dataset.del && confirm("Remover este processo e o histórico guardado?")) { await api(`/api/processos/${b.dataset.del}`, "DELETE"); carregarLista(); }
+    if (b.dataset.del && await confirmar("Remover este processo e o histórico guardado? Esta ação não pode ser desfeita.", { titulo: "Remover processo", ok: "Remover", perigo: true })) { await api(`/api/processos/${b.dataset.del}`, "DELETE"); carregarLista(); }
   } catch (err) { aviso(err.message); }
 };
 async function verMovimentos(id) {
@@ -488,7 +620,7 @@ $("#detalhe").onclick = async (e) => {
   if (b.id === "fechar") $("#detalhe").classList.add("hide");
   if (b.dataset.visto) { await api(`/api/processos/${b.dataset.visto}/visto`, "POST", {}); await carregarLista(); verMovimentos(b.dataset.visto); }
 };
-$("#b-consultar").onclick = async () => { try { if (LISTA.filter(p => p.ativo && p.monitorar).length > 200 && !confirm("Consultar TODOS os processos monitorados agora? Com muitos processos, isso pode demorar bastante e esbarrar nos limites das APIs. A varredura diária já faz isso em blocos, sem você precisar clicar.")) return; const r = await api("/api/consultar", "POST", {}); aviso(`${r.enfileirados} processo(s) na fila de consulta.`); status(); } catch (e) { aviso(e.message); } };
+$("#b-consultar").onclick = async () => { try { if (LISTA.filter(p => p.ativo && p.monitorar).length > 200 && !await confirmar("Consultar TODOS os processos monitorados agora? Com muitos processos, isso pode demorar bastante e esbarrar nos limites das APIs. A varredura diária já faz isso em blocos, sem você precisar clicar.")) return; const r = await api("/api/consultar", "POST", {}); aviso(`${r.enfileirados} processo(s) na fila de consulta.`); status(); } catch (e) { aviso(e.message); } };
 $("#b-visto-todos").onclick = async () => { await api("/api/visto-todos", "POST", {}); carregarLista(); };
 
 let rodandoAntes = false;
@@ -602,12 +734,12 @@ $("#t-oab").onclick = async (e) => {
   const b = e.target.closest("button"); if (!b) return;
   try {
     if (b.dataset.odc) {
-      const m = prompt("Descobrir os processos com publicação no DJEN neste filtro nos últimos quantos meses? (1 a 36)", "12");
+      const m = await perguntar("Descobrir os processos com publicação no DJEN neste filtro nos últimos quantos meses? (1 a 36)", "12", { titulo: "Descobrir processos" });
       if (m) { await api(`/api/oabs/${b.dataset.odc}/descobrir`, "POST", { meses: Number(m) }); aviso("Busca iniciada. Pode levar alguns minutos; acompanhe em “Ver descobertos”."); status(); }
     }
     if (b.dataset.ove) verDescobertos(b.dataset.ove);
     if (b.dataset.oc) { await api(`/api/oabs/${b.dataset.oc}/consultar`, "POST", {}); aviso("OAB colocada na fila de consulta."); }
-    if (b.dataset.od && confirm("Remover este filtro e as publicações guardadas dele?")) { await api(`/api/oabs/${b.dataset.od}`, "DELETE"); carregarOab(); carregarContadorOab(); }
+    if (b.dataset.od && await confirmar("Remover este filtro e as publicações guardadas dele? Esta ação não pode ser desfeita.", { titulo: "Remover filtro", ok: "Remover", perigo: true })) { await api(`/api/oabs/${b.dataset.od}`, "DELETE"); carregarOab(); carregarContadorOab(); }
     if (b.dataset.cad) { const r = await api("/api/processos", "POST", { numeros: cnjMask(b.dataset.cad) });
       aviso(r.adicionados.length ? "Processo cadastrado; consulta na fila." : (r.repetidos.length ? "Processo já cadastrado." : "Não foi possível cadastrar: " + (r.invalidos[0]?.motivo || "número inválido")));
       carregarLista(); carregarOab(); }
@@ -658,7 +790,7 @@ $("#desc-card").onclick = async (e) => {
       const nums = so ? marcados : DESC.itens.filter(x => x.situacao === "novo").map(x => x.numero);
       if (!nums.length) { aviso("Nenhum processo novo para cadastrar."); return; }
       const mon = $("#desc-mon").checked;
-      if (!confirm(`Cadastrar ${nums.length} processo(s)? ` + (mon ? "Todos entram no monitoramento diário (a primeira consulta de cada um vira a base de comparação)."
+      if (!await confirmar(`Cadastrar ${nums.length} processo(s)? ` + (mon ? "Todos entram no monitoramento diário (a primeira consulta de cada um vira a base de comparação)."
         : "Eles ficam só no cadastro, sem consulta diária: as publicações chegam pelo filtro de OAB e o programa confere no DJEN se a sua OAB aparece. Depois você marca “Monitorar” nos que quiser acompanhar."))) return;
       const r = await api("/api/processos", "POST", { numeros: nums.join("\n"), monitorar: mon });
       aviso(`${r.adicionados.length} cadastrado(s)` + (r.repetidos.length ? `, ${r.repetidos.length} já existiam` : "") + (r.invalidos.length ? `, ${r.invalidos.length} inválido(s)` : "") + ".");
@@ -805,7 +937,7 @@ $("#u-lista").addEventListener("click", async (e) => {
   try {
     if (b.dataset.ua) { await post("/api/usuarios/" + b.dataset.ua, { ativo: b.dataset.ativo === "1" }); carregarEquipe(); }
     if (b.dataset.us) {
-      const s = prompt(`Nova senha provisória para "${b.dataset.un}" (mínimo 10 caracteres). A pessoa terá de trocá-la no próximo acesso e será desconectada.`);
+      const s = await perguntar(`Nova senha provisória para "${b.dataset.un}" (mínimo 10 caracteres). A pessoa terá de trocá-la no próximo acesso e será desconectada.`, "", { titulo: "Redefinir senha", senha: true });
       if (s) { await post(`/api/usuarios/${b.dataset.us}/senha`, { senha: s }); aviso("Senha redefinida."); carregarEquipe(); }
     }
   } catch (er) { aviso(er.message); }
@@ -841,7 +973,10 @@ $("#b-aud").onclick = () => carregarAuditoria().catch(e => aviso(e.message));
   if (sess.versao) $("#ver").textContent = "v" + sess.versao;
   if (!sess.usuario) { mostrarLogin(sess.precisa_setup); return; }
   EU = sess.usuario;
+  if (EU.aparencia && EU.aparencia.estilo) { APAR = { ...EU.aparencia }; aplicarAparencia(); }
+  else { try { await api("/api/aparencia", "POST", APAR); } catch (e) {} }  // primeira vez: guarda no usuário o que este navegador já usa
   document.body.classList.toggle("adm", EU.perfil === "admin");
+  $("#usr-av").textContent = (EU.nome || "?").split(/\s+/).filter(Boolean).slice(0, 2).map(s => s[0]).join("").toUpperCase();
   $("#usr-nome").textContent = EU.nome + (EU.perfil === "admin" ? " (administrador)" : "");
   $("#usr").classList.remove("hide");
   if (EU.trocar_senha) { abrirSenha(true); return; }
