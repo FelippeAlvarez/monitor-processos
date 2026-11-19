@@ -158,6 +158,22 @@ def consultar(numero_limpo, base_url=BASE_URL, timeout=60):
     return resultado
 
 
+def consultar_bruto(numero_limpo, inicio="", fim="", base_url=BASE_URL, timeout=60):
+    """Diagnóstico (v0.5.4): devolve o JSON da API do DJEN COMO CHEGOU (sem normalizar), só a 1ª página,
+    junto com a versão normalizada de cada item para comparação. Não grava nada no banco."""
+    params = {"numeroProcesso": numero_limpo}
+    if inicio:
+        params["dataDisponibilizacaoInicio"] = inicio
+    if fim:
+        params["dataDisponibilizacaoFim"] = fim
+    url = f"{base_url.rstrip('/')}/api/v1/comunicacao?" + urllib.parse.urlencode(params)
+    dados = _get(url, timeout)
+    if not isinstance(dados, dict) or "items" not in dados:
+        raise ErroAPI("Resposta do DJEN fora do formato esperado.", transitorio=True)
+    itens = [i for i in (dados.get("items") or []) if isinstance(i, dict)]
+    return {"count": dados.get("count"), "itens_brutos": itens, "itens_normalizados": [normalizar_item(i) for i in itens]}
+
+
 def formatar_cnj(limpo):
     """20 dígitos -> NNNNNNN-DD.AAAA.J.TR.OOOO (devolve como veio se não tiver 20 dígitos)."""
     n = re.sub(r"\D", "", str(limpo))

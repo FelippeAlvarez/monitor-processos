@@ -122,6 +122,26 @@ def r_publicacoes(h):
     h.json(CTX.banco.publicacoes(pid, so_novas=q.get("novas", ["0"])[0] == "1"))
 
 
+def r_diag_dje(h):
+    """Diagnóstico (admin): mostra o JSON bruto do DJEN de um processo, para comparar com o que o programa guarda."""
+    q = parse_qs(urlparse(h.path).query)
+    numero = re.sub(r"\D", "", (q.get("numero") or [""])[0])
+    if len(numero) != 20:
+        return h.json({"erro": "Informe o número CNJ completo (20 dígitos)."}, 400)
+    datas = {}
+    for campo in ("inicio", "fim"):
+        v = (q.get(campo) or [""])[0].strip()
+        if v and not re.fullmatch(r"\d{4}-\d{2}-\d{2}", v):
+            return h.json({"erro": "Datas no formato AAAA-MM-DD."}, 400)
+        datas[campo] = v
+    try:
+        res = dje.consultar_bruto(numero, datas["inicio"], datas["fim"])
+    except dje.ErroAPI as e:
+        return h.json({"erro": str(e)}, 502)
+    h.auditar("diagnostico_dje", numero)
+    h.json(res)
+
+
 def r_pub_visto(h):
     corpo = h.corpo()
     pid = corpo.get("processo_id")
@@ -580,6 +600,7 @@ ROTAS = [
     ("GET", r"/api/status", r_status, "usu"),
     ("GET", r"/api/publicacoes", r_publicacoes, "usu"),
     ("POST", r"/api/publicacoes/visto", r_pub_visto, "usu"),
+    ("GET", r"/api/diagnostico/dje", r_diag_dje, "adm"),
     ("GET", r"/api/oabs", r_oabs, "usu"),
     ("POST", r"/api/oabs", r_oab_add, "adm"),
     ("DELETE", r"/api/oabs/(\d+)", r_oab_del, "adm"),

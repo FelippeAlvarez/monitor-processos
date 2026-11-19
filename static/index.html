@@ -372,6 +372,18 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <p class="mut">Gmail: use uma “senha de app” criada só para esta finalidade, nunca a senha da conta. A senha fica gravada em texto simples no arquivo <code>config.json</code> da pasta de dados do servidor (não vai para o backup nem para o GitHub).</p>
     <div class="acoes"><button class="b" id="b-cfg">Salvar</button><button class="b sec" id="b-teste">Enviar e-mail de teste (salve antes)</button></div>
   </div>
+  <div class="card" id="diag-card">
+    <b>Diagnóstico do DJEN (administrador)</b>
+    <p class="mut">Consulta o DJEN agora, para um processo, e mostra o texto <b>exatamente como a API devolveu</b>, junto com o que o programa guardaria. Não grava nada. Serve para conferir como as publicações chegam (por exemplo, repetidas). O resultado contém o texto das publicações: use só para conferência interna.</p>
+    <div class="grid2">
+      <div><label for="dg-num">Número do processo (CNJ)</label><input id="dg-num" placeholder="0000000-00.0000.0.00.0000" autocomplete="off"></div>
+      <div><label for="dg-ini">Disponibilizado a partir de (opcional)</label><input id="dg-ini" type="date"></div>
+      <div><label for="dg-fim">Até (opcional)</label><input id="dg-fim" type="date"></div>
+    </div>
+    <div class="acoes"><button class="b" id="dg-go">Consultar o DJEN</button><button class="b sec" id="dg-copia" disabled>Copiar resultado</button></div>
+    <p class="mut" id="dg-info"></p>
+    <textarea id="dg-saida" readonly rows="10" style="width:100%;font-family:monospace;font-size:12px" aria-label="Resultado do diagnóstico"></textarea>
+  </div>
 </section>
 
 <section id="t-aparencia" class="hide">
@@ -848,6 +860,24 @@ function capacidade() {
   $("#v-cap").textContent = bloco && iv ? `Com ${bloco} processos a cada ${iv} min, 1.000 processos levam cerca de ${Math.round(Math.ceil(1000 / bloco) * iv / 6) / 10} h (a varredura vai até consultar tudo; não há horário final).` : "";
 }
 ["#v-bloco", "#v-int"].forEach(i => $(i).oninput = capacidade);
+$("#dg-go").onclick = async () => {
+  const num = $("#dg-num").value.trim();
+  $("#dg-info").textContent = "Consultando…"; $("#dg-saida").value = ""; $("#dg-copia").disabled = true;
+  const q = new URLSearchParams({numero: num});
+  if ($("#dg-ini").value) q.set("inicio", $("#dg-ini").value);
+  if ($("#dg-fim").value) q.set("fim", $("#dg-fim").value);
+  try {
+    const r = await api("/api/diagnostico/dje?" + q.toString());
+    $("#dg-saida").value = JSON.stringify(r, null, 2);
+    $("#dg-info").textContent = `A API informou ${r.count} publicação(ões); ${r.itens_brutos.length} vieram nesta resposta.`;
+    $("#dg-copia").disabled = false;
+  } catch (e) { $("#dg-info").textContent = "Erro: " + (e.message || e); }
+};
+$("#dg-copia").onclick = async () => {
+  const t = $("#dg-saida");
+  try { await navigator.clipboard.writeText(t.value); $("#dg-info").textContent = "Copiado."; }
+  catch (e) { t.focus(); t.select(); $("#dg-info").textContent = "Selecionado: use Ctrl+C para copiar."; }
+};
 $("#b-cfg").onclick = async () => {
   try {
     await api("/api/config", "POST", { api_key: $("#k-key").value, dje_ativo: $("#k-dje").checked, intervalo_horas: $("#k-int").value,

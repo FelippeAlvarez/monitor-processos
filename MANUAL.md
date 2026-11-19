@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.5.3)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.5.4)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -235,3 +235,10 @@ Para fazer backup, copie essa pasta. Para apagar tudo, feche o programa e apague
 - As confirmações ("Remover processo?", "Parar de monitorar…") agora aparecem em janelas do próprio programa, no lugar das caixas do navegador.
 - Se a escolha não puder ser salva no servidor (ex.: sem conexão), ela continua valendo naquele navegador e a página avisa.
 - Limite: a fonte do estilo Clássico (serifada) depende de estar instalada no aparelho; se não estiver, o navegador usa uma serifada comum.
+
+23. DIAGNÓSTICO DO DJEN (novo na v0.5.4, só administrador)
+Aba Configurações, no fim da página, cartão "Diagnóstico do DJEN".
+- Digite o número do processo (formato CNJ), se quiser limite as datas de disponibilização e clique em "Consultar o DJEN".
+- O programa consulta o DJEN naquele momento e mostra o resultado em duas partes: "itens_brutos" (o texto EXATAMENTE como a API devolveu) e "itens_normalizados" (o que o programa guardaria).
+- "Copiar resultado" copia tudo para a área de transferência, para você colar numa conversa de suporte ou comparação.
+- Não grava nada no banco. A consulta fica registrada na auditoria. O resultado traz o texto das publicações: use só para conferência interna.
