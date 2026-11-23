@@ -1,0 +1,22 @@
+INSTALADOR DO MONITOR DE PROCESSOS (código-fonte) — v0.6.1
+
+O que é: um instalador para Windows (um .exe só) que instala o Monitor em %LOCALAPPDATA%\MonitorProcessos, com ícone e atalho
+na Área de Trabalho e no Menu Iniciar, e que atualiza sem quebrar o atalho nem tocar nos dados.
+
+Peças
+- cmd/launcher    -> MonitorProcessos.exe: abre o app (procura o Python 3.9+ e roda app\app.py). É o alvo FIXO do atalho.
+- cmd/instalador  -> Instalar-MonitorProcessos-vX.Y.Z.exe: leva embutidos o launcher, o ícone e o pacote do app.
+- internal/inst   -> lógica sem dependência de Windows (extração segura do zip, troca da pasta app, Python, cópia de dados) + testes.
+- res/            -> ícone (monitor.ico), manifesto e versão do .exe.
+
+REGRAS PARA NÃO QUEBRAR O ATALHO EM ATUALIZAÇÕES (não mudar sem motivo forte)
+1. O nome e o local de MonitorProcessos.exe nunca mudam; o atalho aponta só para ele.
+2. A atualização troca apenas a pasta "app" (guardando "app.anterior"). Não renomear a pasta "app".
+3. "dados" e "local.json" nunca são apagados nem sobrescritos (ExtractZip ignora ambos).
+4. O nome do atalho ("Monitor de Processos.lnk") não muda; atalho correto não é reescrito.
+5. app.py (resolver_pasta_dados) reconhece o layout instalado: <raiz>\app\app.py + <raiz>\MonitorProcessos.exe -> dados em <raiz>\dados.
+   Mudou algo disso? Rodar tests/test_equipe.py (TesteLayoutInstalado).
+
+Gerar o instalador (Linux, precisa de Go 1.21+, llvm-rc e llvm-cvtres): ./build.sh   (escreve Instalar-MonitorProcessos-vX.Y.Z.exe aqui)
+Testar a lógica: go test ./internal/...
+Obs.: build.sh lê a versão de ../sobre.json. Antes de publicar, rode a suíte do app (python3 -m unittest discover -s tests).

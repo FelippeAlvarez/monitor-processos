@@ -38,19 +38,28 @@ from monitor import Monitor
 BASE_DIR = Path(__file__).resolve().parent
 
 
+def _instalado():
+    """True se o programa roda no layout do instalador: <raiz>\\app\\app.py com MonitorProcessos.exe na <raiz>."""
+    return BASE_DIR.name.lower() == "app" and (BASE_DIR.parent / "MonitorProcessos.exe").exists()
+
+
 def resolver_pasta_dados():
     """Onde ficam o banco, a configuração e o log. Prioridade: variável MONITOR_DADOS > arquivo local.json
-    ({"pasta_dados": "C:\\Users\\...\\Dropbox\\Monitor"}) > pasta 'dados' ao lado do programa."""
+    ({"pasta_dados": "C:\\Users\\...\\Dropbox\\Monitor"}) > pasta 'dados' ao lado do programa.
+    Instalado pelo instalador: o local.json fica na raiz da instalação (não é apagado nas atualizações) e a pasta
+    de dados padrão é <raiz>\\dados, fora da pasta 'app' que as atualizações substituem."""
     env = os.environ.get("MONITOR_DADOS")
     if env:
         return Path(env).expanduser()
-    try:
-        cfg = json.loads((BASE_DIR / "local.json").read_text(encoding="utf-8"))
-        if str(cfg.get("pasta_dados") or "").strip():
-            return Path(str(cfg["pasta_dados"]).strip()).expanduser()
-    except (OSError, ValueError):
-        pass
-    return BASE_DIR / "dados"
+    pastas = [BASE_DIR] + ([BASE_DIR.parent] if _instalado() else [])
+    for pasta in pastas:
+        try:
+            cfg = json.loads((pasta / "local.json").read_text(encoding="utf-8"))
+            if str(cfg.get("pasta_dados") or "").strip():
+                return Path(str(cfg["pasta_dados"]).strip()).expanduser()
+        except (OSError, ValueError):
+            pass
+    return (BASE_DIR.parent if _instalado() else BASE_DIR) / "dados"
 
 
 DADOS = resolver_pasta_dados()

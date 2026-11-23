@@ -1,0 +1,20 @@
+1 ICON "monitor.ico"
+1 24 "manifest.xml"
+1 VERSIONINFO
+FILEVERSION 0,6,1,0
+PRODUCTVERSION 0,6,1,0
+FILEOS 0x00040004L
+FILETYPE 1
+{
+  BLOCK "StringFileInfo" { BLOCK "041604B0" {
+    VALUE "CompanyName", "Alvarez de Sá Advocacia"
+    VALUE "FileDescription", "Instalador do Monitor de Processos"
+    VALUE "FileVersion", "0.6.1.0"
+    VALUE "InternalName", "instalador"
+    VALUE "LegalCopyright", "© 2026 Felippe Alvarez de Sá. Todos os direitos reservados."
+    VALUE "OriginalFilename", "Instalar-MonitorProcessos.exe"
+    VALUE "ProductName", "Monitor de Processos"
+    VALUE "ProductVersion", "0.6.1.0"
+  } }
+  BLOCK "VarFileInfo" { VALUE "Translation", 0x0416, 0x04B0 }
+}

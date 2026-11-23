@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.6.0)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.6.1)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -268,3 +268,21 @@ d) Calcular prazo (botão no cartão da publicação). Você informa a data de d
    NÃO considera: feriados estaduais/municipais, Carnaval, Semana Santa e Corpus Christi (só se cadastrados em Configurações > Feriados extras), suspensões
    ou prorrogações por ato do tribunal, indisponibilidade do sistema, prazo em dobro ou diferenciado. Na dúvida o programa escolhe o prazo mais curto.
    FERRAMENTA DE APOIO: não substitui a conferência nos portais do tribunal nem a análise do advogado. O aviso aparece sempre na janela do cálculo.
+
+25. INSTALAÇÃO COM ATALHO E ATUALIZAÇÕES (v0.6.1)
+Instalação: dê dois cliques em Instalar-MonitorProcessos-vX.Y.Z.exe e responda às perguntas. O programa é instalado em
+%LOCALAPPDATA%\MonitorProcessos (não exige senha de administrador) e cria o atalho "Monitor de Processos" na Área de Trabalho
+e no Menu Iniciar. O Python 3.9+ continua sendo necessário (python.org; marque "Add python.exe to PATH"): o instalador avisa se faltar.
+O Windows pode mostrar "O Windows protegeu o computador" (SmartScreen), pois o instalador não tem assinatura digital paga:
+clique em "Mais informações" > "Executar assim mesmo", se o arquivo veio de quem faz a manutenção.
+
+Como as atualizações preservam o atalho:
+- O atalho aponta sempre para MonitorProcessos.exe, que nunca muda de nome nem de lugar. Ele só abre o programa.
+- Cada atualização troca apenas a pasta "app". A versão anterior fica em "app.anterior" (para voltar, se for preciso).
+- A pasta "dados" (banco, configuração, log) e o arquivo local.json NUNCA são apagados nem sobrescritos.
+- No fim de cada instalação/atualização o instalador confere se os atalhos existem e apontam para o lugar certo; se faltar um, recria.
+  Um atalho que já está certo não é mexido (a posição na Área de Trabalho é preservada).
+Para atualizar: feche a janela preta do Monitor e execute o novo Instalar-MonitorProcessos. Para remover: Configurações do Windows >
+Aplicativos > "Monitor de Processos" (os dados NÃO são apagados). Pasta de dados em outro lugar (Dropbox): crie local.json na pasta
+%LOCALAPPDATA%\MonitorProcessos com {"pasta_dados": "C:\\Users\\Fulano\\Dropbox\\Monitor"}.
+Rotina de manutenção (quem gera o instalador): instalador\build.sh, descrito em instalador\LEIA-ME.txt.

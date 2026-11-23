@@ -1,0 +1,6 @@
+*.exe
+*.syso
+cmd/instalador/payload/
+res/_*
+res/*.obj
+res/*.res

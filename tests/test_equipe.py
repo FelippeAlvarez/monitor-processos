@@ -398,3 +398,28 @@ class TestePastaDeDados(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TesteLayoutInstalado(unittest.TestCase):
+    """v0.6.1: no layout do instalador (<raiz>/app + MonitorProcessos.exe), os dados ficam em <raiz>/dados."""
+
+    def test_layout_instalado(self):
+        import tempfile
+        from unittest import mock
+        antigo_env = os.environ.pop("MONITOR_DADOS", None)
+        try:
+            with tempfile.TemporaryDirectory() as t:
+                raiz = Path(t) / "MonitorProcessos"
+                (raiz / "app").mkdir(parents=True)
+                (raiz / "MonitorProcessos.exe").write_bytes(b"x")
+                with mock.patch.object(app, "BASE_DIR", raiz / "app"):
+                    self.assertEqual(app.resolver_pasta_dados(), raiz / "dados")
+                    (raiz / "local.json").write_text(json.dumps({"pasta_dados": "/tmp/dropbox-x"}), encoding="utf-8")
+                    self.assertEqual(app.resolver_pasta_dados(), Path("/tmp/dropbox-x"))
+                # pasta 'app' sem o .exe ao lado = não é instalação: comportamento antigo
+                (raiz / "MonitorProcessos.exe").unlink()
+                with mock.patch.object(app, "BASE_DIR", raiz / "app"):
+                    self.assertEqual(app.resolver_pasta_dados(), raiz / "app" / "dados")
+        finally:
+            if antigo_env:
+                os.environ["MONITOR_DADOS"] = antigo_env
