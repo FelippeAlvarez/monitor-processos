@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.5.4)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.6.0)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -76,7 +76,8 @@ Para fazer backup, copie essa pasta. Para apagar tudo, feche o programa e apague
 - Além do DataJud, o programa consulta, para cada processo, as publicações do Diário de Justiça Eletrônico Nacional
   (API Comunica PJe, do CNJ: comunicaapi.pje.jus.br, sem login). Diferente do DataJud, traz o TEXTO da publicação.
 - Aba "Publicações": lista, da mais recente à mais antiga, com data, tipo, órgão, destinatários, advogados e texto.
-  Pode filtrar só as não vistas e marcar todas como vistas. Publicações canceladas pelo tribunal aparecem marcadas e não alertam.
+  Pode filtrar por situação (novas, em análise, tratadas, todas). Publicações canceladas pelo tribunal aparecem marcadas e não alertam.
+  A partir da v0.6 a "vista" virou SITUAÇÃO COMPARTILHADA (veja a seção 24); o botão "Passar as novas para em análise" faz o papel do antigo "marcar como vistas".
 - Na 1ª consulta de cada processo, só publicações dos últimos 15 dias contam como novas; as mais antigas entram como vistas.
 - O alerta por e-mail passa a trazer um trecho (até 700 caracteres) do texto da publicação. Atenção: isso põe conteúdo
   processual no seu e-mail; use uma caixa sua e protegida.
@@ -242,3 +243,28 @@ Aba Configurações, no fim da página, cartão "Diagnóstico do DJEN".
 - O programa consulta o DJEN naquele momento e mostra o resultado em duas partes: "itens_brutos" (o texto EXATAMENTE como a API devolveu) e "itens_normalizados" (o que o programa guardaria).
 - "Copiar resultado" copia tudo para a área de transferência, para você colar numa conversa de suporte ou comparação.
 - Não grava nada no banco. A consulta fica registrada na auditoria. O resultado traz o texto das publicações: use só para conferência interna.
+
+24. PUBLICAÇÕES PARA A EQUIPE (novo na v0.6)
+a) Situação compartilhada. Cada publicação tem uma situação: NOVA, EM ANÁLISE ou TRATADA. Troque no seletor "Situação" do cartão da publicação.
+   Vale para toda a equipe e mostra quem mudou e quando. Pode voltar a "nova". O contador do Painel conta só as novas.
+   O botão "Passar as novas para em análise" (aba Publicações) tira o selo "nova" de todas de uma vez, sem marcá-las como tratadas.
+   O que já estava "visto" antes da v0.6 vira "tratada (antes da v0.6)"; o histórico dos primeiros 15 dias, "tratada (histórico)".
+b) Responsável por processo. Na lista de processos: botão "Responsável" (um processo) ou "Definir responsável dos da lista…" (todos os da lista atual).
+   O responsável aparece na lista e nas publicações e recebe por e-mail as publicações novas dos seus processos (precisa ter e-mail no cadastro de usuário
+   e o envio de alertas ligado; quem já está na lista de destinatários gerais não recebe em duplicidade). Usuário desativado não pode ser responsável.
+c) Publicações repetidas (muito comuns na Justiça do Trabalho: uma cópia por parte). Aparecem UMA VEZ SÓ, com "×N cópias", e os intimados de cada cópia
+   ficam numa lista recolhível. Situação, contadores, alerta e e-mail valem para o grupo. REGRA: só agrupa se processo, data, tipo, órgão, tipo de documento
+   e TEXTO forem idênticos (descontados apenas o bloco "Intimado(s) / Citado(s)", o marcador de id e a frase fixa do cabeçalho do DJEN). Se o texto
+   diferir em qualquer palavra, NÃO agrupa. Cópia que chega depois herda a situação do grupo e não alerta de novo.
+   Limite: a regra foi calibrada com publicações do TRT1; confira se o agrupamento se comporta como esperado com os textos que a API entrega.
+d) Calcular prazo (botão no cartão da publicação). Você informa a data de disponibilização (já preenchida) e o número de dias ÚTEIS. O programa mostra o
+   vencimento e a MEMÓRIA DE CÁLCULO. Nada é automático.
+   Regras (conferidas no texto legal em 23/11/2026): CPC art. 219 (dias úteis); art. 224, caput (exclui o dia do começo, inclui o do vencimento),
+   § 2º (publicação = 1º dia útil seguinte à disponibilização) e § 3º (contagem começa no 1º dia útil seguinte à publicação); Lei 11.419/2006 art. 4º, §§ 3º e 4º;
+   CPC art. 220 (suspensão de 20/12 a 20/01, INCLUSIVE). Feriados nacionais: Lei 662/1949 (1/1, 21/4, 1/5, 7/9, 2/11, 15/11, 25/12), Lei 6.802/1980 (12/10) e
+   Lei 14.759/2023 (20/11).
+   ATENÇÃO: o recesso está padronizado em 20/01 (texto do CPC). Se o seu entendimento é 19/01, ajuste em Configurações > Cálculo de prazo.
+   Interpretação adotada (não escrita na lei): a data da publicação usa dias úteis comuns; o recesso só suspende a CONTAGEM.
+   NÃO considera: feriados estaduais/municipais, Carnaval, Semana Santa e Corpus Christi (só se cadastrados em Configurações > Feriados extras), suspensões
+   ou prorrogações por ato do tribunal, indisponibilidade do sistema, prazo em dobro ou diferenciado. Na dúvida o programa escolhe o prazo mais curto.
+   FERRAMENTA DE APOIO: não substitui a conferência nos portais do tribunal nem a análise do advogado. O aviso aparece sempre na janela do cálculo.

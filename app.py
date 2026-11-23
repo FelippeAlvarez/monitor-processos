@@ -24,6 +24,7 @@ from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import auth
+import prazos
 import backup
 import datajud
 import db
@@ -119,7 +120,8 @@ def r_status(h):
 def r_publicacoes(h):
     q = parse_qs(urlparse(h.path).query)
     pid = int(q["processo"][0]) if q.get("processo") else None
-    h.json(CTX.banco.publicacoes(pid, so_novas=q.get("novas", ["0"])[0] == "1"))
+    sit = (q.get("situacao") or [""])[0]
+    h.json(CTX.banco.publicacoes(pid, so_novas=q.get("novas", ["0"])[0] == "1", situacao=sit or None))
 
 
 def r_diag_dje(h):
@@ -143,10 +145,62 @@ def r_diag_dje(h):
 
 
 def r_pub_visto(h):
+    """Tira as publicações novas de 'nova' (passam a 'em análise'). Não marca nada como tratada."""
     corpo = h.corpo()
     pid = corpo.get("processo_id")
-    CTX.banco.marcar_pub_vistas(int(pid) if pid else None)
+    CTX.banco.marcar_pub_vistas(int(pid) if pid else None, por=h.usuario["nome"])
     h.json({"ok": True})
+
+
+def r_pub_situacao(h):
+    """Situação COMPARTILHADA de uma publicação (vale para todas as cópias do grupo): nova, em análise ou tratada."""
+    c = h.corpo()
+    try:
+        pid, grupo, sit = int(c.get("processo_id")), str(c.get("grupo") or ""), str(c.get("situacao") or "")
+    except (TypeError, ValueError):
+        return h.json({"erro": "Informe a publicação."}, 400)
+    if not grupo or sit not in db.SITUACOES:
+        return h.json({"erro": "Situação inválida."}, 400)
+    n = CTX.banco.definir_situacao(pid, grupo, sit, h.usuario["nome"])
+    if n:
+        p = CTX.banco.obter(pid)
+        h.auditar("publicacao_situacao", f"{p['numero'] if p else pid}: {sit}")
+    h.json({"ok": True, "alteradas": n})
+
+
+def r_responsavel(h):
+    c = h.corpo()
+    ids = c.get("ids")
+    if not isinstance(ids, list) or not ids or len(ids) > 5000:
+        return h.json({"erro": "Informe a lista de processos (até 5000)."}, 400)
+    uid = c.get("responsavel_id")
+    try:
+        uid = int(uid) if uid not in (None, "", 0) else None
+        n = CTX.banco.definir_responsavel([int(i) for i in ids], uid)
+    except (ValueError, TypeError) as e:
+        return h.json({"erro": str(e)}, 400)
+    h.auditar("responsavel_definido", f"{n} processo(s) → " + (CTX.auth.obter(uid)["nome"] if uid else "(ninguém)"))
+    h.json({"ok": True, "alterados": n})
+
+
+def r_equipe(h):
+    """Nomes dos usuários ativos (para escolher o responsável). Sem e-mail."""
+    h.json([{"id": u["id"], "nome": u["nome"]} for u in CTX.auth.listar() if u["ativo"]])
+
+
+def r_prazo(h):
+    """Calcula o prazo em dias úteis a partir da data de disponibilização. Não grava nada."""
+    c = h.corpo()
+    try:
+        cfg = CTX.config.dados.get("prazos", {})
+        cal = prazos.Calendario(cfg.get("feriados_extras"), cfg.get("recesso"))
+        dias = c.get("dias")
+        if isinstance(dias, str) and dias.strip().isdigit():
+            dias = int(dias.strip())
+        res = prazos.calcular(prazos.data_de_texto(c.get("data")), dias, cal)
+    except prazos.ErroPrazo as e:
+        return h.json({"erro": str(e)}, 400)
+    h.json(res)
 
 
 UFS = {"AC", "AL", "AM", "AP", "BA", "CE", "DF", "ES", "GO", "MA", "MG", "MS", "MT", "PA", "PB", "PE", "PI", "PR",
@@ -600,6 +654,10 @@ ROTAS = [
     ("GET", r"/api/status", r_status, "usu"),
     ("GET", r"/api/publicacoes", r_publicacoes, "usu"),
     ("POST", r"/api/publicacoes/visto", r_pub_visto, "usu"),
+    ("POST", r"/api/publicacoes/situacao", r_pub_situacao, "usu"),
+    ("POST", r"/api/processos/responsavel", r_responsavel, "usu"),
+    ("GET", r"/api/equipe", r_equipe, "usu"),
+    ("POST", r"/api/prazo", r_prazo, "usu"),
     ("GET", r"/api/diagnostico/dje", r_diag_dje, "adm"),
     ("GET", r"/api/oabs", r_oabs, "usu"),
     ("POST", r"/api/oabs", r_oab_add, "adm"),

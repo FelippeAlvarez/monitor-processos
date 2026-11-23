@@ -20,6 +20,8 @@ PADRAO = {
     "varredura": {"ativa": True, "bloco": 100, "intervalo_min": 10, "inicio": "02:00"},  # começa de madrugada e vai até consultar tudo (sem horário final)
     # v0.5.2: inclusão/saída automática do monitoramento diário conforme a OAB apareça (ou não) nas publicações do processo
     "monitoramento": {"auto_sem_oab": True, "auto_dias": 180},
+    # v0.6: cálculo de prazo (feriados extras: lista de "AAAA-MM-DD nome"; recesso: MM-DD a MM-DD, inclusive)
+    "prazos": {"feriados_extras": [], "recesso": {"ativo": True, "inicio": "12-20", "fim": "01-20"}},
     "pasta_backup": "",          # vazio = <pasta de dados>/backups (pode ser uma pasta do Dropbox)
     "backup_ativo": True,
     "backup_hora": "02:00",
@@ -119,6 +121,35 @@ class Config:
                     if not 30 <= nm["auto_dias"] <= 1095:
                         raise ValueError("O prazo de atividade recente deve ficar entre 30 e 1095 dias.")
                 d["monitoramento"] = nm
+            pz = novo.get("prazos")
+            if isinstance(pz, dict):
+                import prazos
+                np_ = copy.deepcopy(d["prazos"])
+                if "feriados_extras" in pz:
+                    extras = pz["feriados_extras"]
+                    if isinstance(extras, str):
+                        extras = extras.splitlines()
+                    if not isinstance(extras, list) or len(extras) > 300:
+                        raise ValueError("Feriados extras: lista inválida (até 300 linhas).")
+                    limpos = []
+                    for linha in extras:
+                        linha = str(linha).strip()
+                        if not linha:
+                            continue
+                        prazos.data_de_texto(linha.split()[0])  # levanta ErroPrazo (ValueError) se a data for inválida
+                        limpos.append(linha[:80])
+                    np_["feriados_extras"] = limpos
+                rc = pz.get("recesso")
+                if isinstance(rc, dict):
+                    nr = dict(np_["recesso"])
+                    if "ativo" in rc:
+                        nr["ativo"] = bool(rc["ativo"])
+                    for campo in ("inicio", "fim"):
+                        if campo in rc:
+                            prazos._mmdd(rc[campo])
+                            nr[campo] = str(rc[campo]).strip()
+                    np_["recesso"] = nr
+                d["prazos"] = np_
             if "pasta_backup" in novo:
                 d["pasta_backup"] = str(novo["pasta_backup"]).strip()[:300]
             if "backup_ativo" in novo:

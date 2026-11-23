@@ -5,6 +5,8 @@ import re
 import sqlite3
 import threading
 
+import agrupar
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS processos(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,6 +42,7 @@ CREATE TABLE IF NOT EXISTS movimentos(
 
 
 TOLERANCIA_DIAS = 7
+SITUACOES = ("nova", "analise", "tratada")
 MOTIVOS = ("estrategico", "alto_valor", "tribunal_raro", "sem_oab", "outro")
 TRIAGEM_DIAS = 7   # processo não monitorado e sem OAB identificada: confere no DJEN, no máximo, 1 vez por semana
 BASELINE_PUB_DIAS = 15  # na 1ª consulta do DJEN, publicações dos últimos 15 dias contam como novas (prazo pode estar correndo)
@@ -180,6 +183,20 @@ class Banco:
                           ("aviso", "TEXT DEFAULT ''"), ("aviso_em", "TEXT")):
             if nome not in colunas:
                 self.conn.execute(f"ALTER TABLE processos ADD COLUMN {nome} {ddl}")
+        # v0.6: responsável por processo; situação compartilhada e grupo das publicações
+        if "responsavel_id" not in colunas:
+            self.conn.execute("ALTER TABLE processos ADD COLUMN responsavel_id INTEGER")
+        cols_pub = {r["name"] for r in self.conn.execute("PRAGMA table_info(publicacoes)").fetchall()}
+        antes_v06 = "situacao" not in cols_pub
+        for nome, ddl in (("situacao", "TEXT NOT NULL DEFAULT 'nova'"), ("situacao_por", "TEXT DEFAULT ''"),
+                          ("situacao_em", "TEXT"), ("grupo", "TEXT NOT NULL DEFAULT ''")):
+            if nome not in cols_pub:
+                self.conn.execute(f"ALTER TABLE publicacoes ADD COLUMN {nome} {ddl}")
+        if antes_v06:
+            # o que já estava "visto" vira "tratada" (a v0.5 só tinha visto/não visto), com a origem explícita
+            self.conn.execute("UPDATE publicacoes SET situacao='tratada', situacao_por='(antes da v0.6)' WHERE visto=1")
+        self._agrupar_existentes()
+        self.conn.execute("CREATE INDEX IF NOT EXISTS ix_pub_grupo ON publicacoes(processo_id, grupo)")
         cols_oab = {r["name"] for r in self.conn.execute("PRAGMA table_info(oabs)").fetchall()}
         if "tipo" not in cols_oab:
             self.conn.execute("ALTER TABLE oabs ADD COLUMN tipo TEXT NOT NULL DEFAULT 'oab'")
@@ -187,6 +204,30 @@ class Banco:
             self.conn.execute("ALTER TABLE processos ADD COLUMN baseline_feito INTEGER NOT NULL DEFAULT 0")
             self.conn.execute("UPDATE processos SET baseline_feito=1 "
                               "WHERE status='ok' OR id IN (SELECT DISTINCT processo_id FROM movimentos)")
+
+    def _agrupar_existentes(self):
+        """Calcula o grupo das publicações que ainda não têm (banco da v0.5) e uniformiza a situação dentro de cada grupo
+        (vale a mais avançada: tratada > em análise > nova), para um grupo nunca ficar meio visto."""
+        pend = self.conn.execute("SELECT id, processo_id, pub_id, data_disp, tipo_com, orgao, tipo_doc, cancelada, texto "
+                                 "FROM publicacoes WHERE grupo=''").fetchall()
+        if not pend:
+            return
+        for r in pend:
+            self.conn.execute("UPDATE publicacoes SET grupo=? WHERE id=?", (agrupar.chave(r["processo_id"], dict(r)), r["id"]))
+        rank = {"nova": 0, "analise": 1, "tratada": 2}
+        for g in self.conn.execute("SELECT processo_id, grupo FROM publicacoes WHERE grupo LIKE 'g:%' "
+                                   "GROUP BY processo_id, grupo HAVING COUNT(*)>1 AND COUNT(DISTINCT situacao)>1").fetchall():
+            linhas = self.conn.execute("SELECT situacao, situacao_por, situacao_em FROM publicacoes WHERE processo_id=? AND grupo=?",
+                                       (g["processo_id"], g["grupo"])).fetchall()
+            melhor = max(linhas, key=lambda x: rank.get(x["situacao"], 0))
+            self.conn.execute("UPDATE publicacoes SET situacao=?, situacao_por=?, situacao_em=?, visto=? WHERE processo_id=? AND grupo=?",
+                              (melhor["situacao"], melhor["situacao_por"], melhor["situacao_em"],
+                               0 if melhor["situacao"] == "nova" else 1, g["processo_id"], g["grupo"]))
+
+    def _sql_resp(self):
+        """Subconsulta do nome do responsável (a tabela de usuários é criada pelo módulo de login; pode não existir em testes isolados)."""
+        existe = self.conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='usuarios'").fetchone()
+        return "(SELECT u.nome FROM usuarios u WHERE u.id=p.responsavel_id)" if existe else "NULL"
 
     def _linhas(self, sql, args=()):
         with self.lock:
@@ -233,10 +274,12 @@ class Banco:
                  ORDER BY m.data_hora DESC, m.id DESC LIMIT 1) AS ultimo_mov,
               (SELECT m.data_hora FROM movimentos m WHERE m.processo_id=p.id
                  ORDER BY m.data_hora DESC, m.id DESC LIMIT 1) AS ultimo_mov_data,
-              (SELECT COUNT(*) FROM publicacoes b WHERE b.processo_id=p.id) AS pub_total,
-              (SELECT COUNT(*) FROM publicacoes b WHERE b.processo_id=p.id AND b.visto=0 AND b.cancelada=0) AS pub_novas,
+              (SELECT COUNT(DISTINCT b.grupo) FROM publicacoes b WHERE b.processo_id=p.id) AS pub_total,
+              (SELECT COUNT(DISTINCT b.grupo) FROM publicacoes b WHERE b.processo_id=p.id AND b.situacao='nova' AND b.cancelada=0) AS pub_novas,
+              (SELECT COUNT(DISTINCT b.grupo) FROM publicacoes b WHERE b.processo_id=p.id AND b.situacao='analise' AND b.cancelada=0) AS pub_analise,
+              {RESP} AS responsavel_nome,
               (SELECT MAX(b.data_disp) FROM publicacoes b WHERE b.processo_id=p.id) AS pub_ultima
-            FROM processos p ORDER BY novos DESC, p.apelido, p.numero""")
+            FROM processos p ORDER BY novos DESC, p.apelido, p.numero""".replace("{RESP}", self._sql_resp()))
 
     def movimentos(self, pid):
         return self._linhas("SELECT * FROM movimentos WHERE processo_id=? "
@@ -300,6 +343,7 @@ class Banco:
         Na 1ª consulta bem-sucedida, publicações com mais de BASELINE_PUB_DIAS dias entram como
         já vistas; as mais recentes contam como novas (podem ter prazo em curso)."""
         novas = []
+        grupos_novos = {}   # grupo -> item já listado em `novas` nesta chamada (para contar as cópias)
         with self.lock:
             p = self.obter(pid)
             if p is None:
@@ -307,24 +351,40 @@ class Banco:
             baseline = not p["dje_baseline"]
             hoje = dt.date.today()
             for it in itens:
+                g = agrupar.chave(pid, it)
                 existe = self.conn.execute("SELECT 1 FROM publicacoes WHERE processo_id=? AND pub_id=?",
                                            (pid, it["pub_id"])).fetchone()
                 if existe:
-                    self.conn.execute("UPDATE publicacoes SET cancelada=?, texto=?, tipo_doc=?, orgao=?, hash=? "
+                    self.conn.execute("UPDATE publicacoes SET cancelada=?, texto=?, tipo_doc=?, orgao=?, hash=?, grupo=? "
                                       "WHERE processo_id=? AND pub_id=?",
-                                      (it["cancelada"], it["texto"], it["tipo_doc"], it["orgao"], it["hash"],
+                                      (it["cancelada"], it["texto"], it["tipo_doc"], it["orgao"], it["hash"], g,
                                        pid, it["pub_id"]))
                     continue
                 d = _data(it["data_disp"])
                 antiga = baseline and (d is None or (hoje - d).days > BASELINE_PUB_DIAS)
+                irma = self.conn.execute("SELECT situacao, situacao_por, situacao_em, visto FROM publicacoes "
+                                         "WHERE processo_id=? AND grupo=? ORDER BY id LIMIT 1", (pid, g)).fetchone() \
+                    if g.startswith("g:") else None
+                if irma:   # cópia de uma publicação que já existe: herda a situação do grupo e não alerta de novo
+                    sit, por, em, visto = irma["situacao"], irma["situacao_por"], irma["situacao_em"], irma["visto"]
+                elif antiga:
+                    sit, por, em, visto = "tratada", "(histórico)", agora(), 1
+                else:
+                    sit, por, em, visto = "nova", "", None, 0
                 self.conn.execute(
                     "INSERT INTO publicacoes(processo_id,pub_id,data_disp,tipo_com,orgao,tipo_doc,classe,texto,meio,"
-                    "hash,destinatarios,advogados,cancelada,visto,detectado_em) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "hash,destinatarios,advogados,cancelada,visto,detectado_em,situacao,situacao_por,situacao_em,grupo) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (pid, it["pub_id"], it["data_disp"], it["tipo_com"], it["orgao"], it["tipo_doc"], it["classe"],
                      it["texto"], it["meio"], it["hash"], it["destinatarios"], it["advogados"], it["cancelada"],
-                     1 if antiga else 0, agora()))
-                if not antiga and not it["cancelada"]:
+                     visto, agora(), sit, por, em, g))
+                if irma:
+                    if g in grupos_novos:
+                        grupos_novos[g]["copias"] = grupos_novos[g].get("copias", 1) + 1
+                elif not antiga and not it["cancelada"]:
+                    it["copias"] = 1
                     novas.append(it)
+                    grupos_novos[g] = it
             self.conn.execute("UPDATE processos SET dje_baseline=1 WHERE id=?", (pid,))
             self.conn.commit()
         return novas
@@ -335,26 +395,87 @@ class Banco:
                               (status, agora(), mensagem, pid))
             self.conn.commit()
 
-    def publicacoes(self, pid=None, so_novas=False, limite=300):
-        sql = ("SELECT b.*, p.numero, p.apelido, p.cliente FROM publicacoes b "
-               "JOIN processos p ON p.id=b.processo_id WHERE 1=1")
-        args = []
+    def publicacoes(self, pid=None, so_novas=False, limite=300, situacao=None):
+        """Publicações do DJEN, UMA linha por grupo (cópias repetidas juntas: campo `copias`, `ids`, `intimados`)."""
+        filtro, args = "1=1", []
         if pid is not None:
-            sql += " AND b.processo_id=?"
+            filtro += " AND processo_id=?"
             args.append(pid)
         if so_novas:
-            sql += " AND b.visto=0 AND b.cancelada=0"
-        sql += " ORDER BY b.data_disp DESC, b.id DESC LIMIT ?"
+            filtro += " AND situacao='nova' AND cancelada=0"
+        elif situacao in SITUACOES:
+            filtro += " AND situacao=?"
+            args.append(situacao)
+        sql = ("SELECT b.*, p.numero, p.apelido, p.cliente, p.responsavel_id, "
+               + self._sql_resp() + " AS responsavel_nome "
+               "FROM publicacoes b JOIN processos p ON p.id=b.processo_id "
+               "WHERE (b.processo_id, b.grupo) IN (SELECT processo_id, grupo FROM publicacoes WHERE " + filtro +
+               " GROUP BY processo_id, grupo ORDER BY MAX(data_disp) DESC, MAX(id) DESC LIMIT ?) "
+               "ORDER BY b.data_disp DESC, b.id DESC")
         args.append(int(limite))
-        return self._linhas(sql, tuple(args))
+        grupos, ordem = {}, []
+        for r in self._linhas(sql, tuple(args)):
+            k = (r["processo_id"], r["grupo"])
+            if k not in grupos:
+                grupos[k] = []
+                ordem.append(k)
+            grupos[k].append(r)
+        return [agrupar.resumo_grupo(grupos[k]) for k in ordem]
 
-    def marcar_pub_vistas(self, pid=None):
+    def definir_situacao(self, pid, grupo, situacao, por=""):
+        """Muda a situação de UM grupo de publicações (todas as cópias). Devolve quantas linhas mudaram."""
+        if situacao not in SITUACOES:
+            raise ValueError("Situação inválida.")
         with self.lock:
-            if pid is None:
-                self.conn.execute("UPDATE publicacoes SET visto=1 WHERE visto=0")
-            else:
-                self.conn.execute("UPDATE publicacoes SET visto=1 WHERE processo_id=? AND visto=0", (pid,))
+            cur = self.conn.execute(
+                "UPDATE publicacoes SET situacao=?, situacao_por=?, situacao_em=?, visto=? "
+                "WHERE processo_id=? AND grupo=? AND (situacao<>? OR situacao_por<>?)",
+                (situacao, por, agora(), 0 if situacao == "nova" else 1, pid, grupo, situacao, por))
             self.conn.commit()
+            return cur.rowcount
+
+    def marcar_pub_vistas(self, pid=None, por=""):
+        """Tira de 'nova' (passa a 'em análise') as publicações novas — de um processo ou de todos. Não marca como tratada."""
+        with self.lock:
+            sql = "UPDATE publicacoes SET situacao='analise', situacao_por=?, situacao_em=?, visto=1 WHERE situacao='nova'"
+            args = [por, agora()]
+            if pid is not None:
+                sql += " AND processo_id=?"
+                args.append(pid)
+            self.conn.execute(sql, args)
+            self.conn.commit()
+
+    def definir_responsavel(self, ids, uid):
+        """Define (ou limpa, uid=None) o responsável por processos. Devolve quantos mudaram."""
+        ids = [int(i) for i in ids]
+        with self.lock:
+            if uid is not None:
+                u = self.email_do_responsavel_ou_ativo(uid)
+                if not u:
+                    raise ValueError("Usuário não encontrado ou desativado.")
+                uid = int(uid)
+            n = 0
+            for i in range(0, len(ids), 500):
+                lote = ids[i:i + 500]
+                cur = self.conn.execute(
+                    f"UPDATE processos SET responsavel_id=? WHERE id IN ({','.join('?' * len(lote))}) "
+                    "AND COALESCE(responsavel_id,0)<>COALESCE(?,0)", [uid, *lote, uid])
+                n += cur.rowcount
+            self.conn.commit()
+        return n
+
+    def email_do_responsavel_ou_ativo(self, uid):
+        if not self.conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='usuarios'").fetchone():
+            return False
+        return self.conn.execute("SELECT 1 FROM usuarios WHERE id=? AND ativo=1", (int(uid),)).fetchone() is not None
+
+    def email_do_responsavel(self, uid):
+        if not uid:
+            return None
+        if not self.conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='usuarios'").fetchone():
+            return None
+        linhas = self._linhas("SELECT nome, email FROM usuarios WHERE id=? AND ativo=1 AND email<>''", (uid,))
+        return linhas[0] if linhas else None
 
     # ------------------------------------------------------------ OAB
     def adicionar_oab(self, numero, uf, rotulo="", tipo="oab"):
@@ -408,7 +529,7 @@ class Banco:
         novas = []
         with self.lock:
             cadastrados = {r["numero_limpo"]: dict(r) for r in self.conn.execute(
-                "SELECT id, numero, apelido, cliente, numero_limpo, monitorar FROM processos WHERE ativo=1")}
+                "SELECT id, numero, apelido, cliente, numero_limpo, monitorar, responsavel_id FROM processos WHERE ativo=1")}
             proprias = self.oabs_proprias()
             vistos_lote = set()
             for it in itens:
@@ -444,13 +565,21 @@ class Banco:
 
     def _inserir_pub_processo(self, pid, it):
         """Grava a publicação (vinda do filtro de OAB) no próprio processo. Não mexe na 'linha de base' do DJEN do processo.
-        Devolve True se era inédita."""
+        Devolve True se era inédita E não é cópia de uma publicação que o processo já tinha (cópia herda a situação do grupo)."""
+        g = agrupar.chave(pid, it)
+        irma = self.conn.execute("SELECT situacao, situacao_por, situacao_em, visto FROM publicacoes "
+                                 "WHERE processo_id=? AND grupo=? ORDER BY id LIMIT 1", (pid, g)).fetchone() \
+            if g.startswith("g:") else None
+        sit, por, em, visto = (irma["situacao"], irma["situacao_por"], irma["situacao_em"], irma["visto"]) if irma \
+            else ("nova", "", None, 0)
         cur = self.conn.execute(
             "INSERT OR IGNORE INTO publicacoes(processo_id,pub_id,data_disp,tipo_com,orgao,tipo_doc,classe,texto,meio,hash,"
-            "destinatarios,advogados,cancelada,visto,detectado_em) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,0,?)",
+            "destinatarios,advogados,cancelada,visto,detectado_em,situacao,situacao_por,situacao_em,grupo) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (pid, it["pub_id"], it["data_disp"], it["tipo_com"], it["orgao"], it["tipo_doc"], it["classe"], it["texto"],
-             it["meio"], it.get("hash", ""), it["destinatarios"], it.get("advogados", "[]"), it["cancelada"], agora()))
-        return cur.rowcount > 0
+             it["meio"], it.get("hash", ""), it["destinatarios"], it.get("advogados", "[]"), it["cancelada"], visto,
+             agora(), sit, por, em, g))
+        return cur.rowcount > 0 and irma is None
 
     def oab_publicacoes(self, oid=None, so_novas=False, limite=300):
         sql = ("SELECT b.*, o.numero AS oab_numero, o.uf AS oab_uf, o.tipo AS filtro_tipo, o.rotulo AS oab_rotulo, "
@@ -492,7 +621,8 @@ class Banco:
         return n
 
     def total_pub_novas(self):
-        return self._linhas("SELECT COUNT(*) AS n FROM publicacoes WHERE visto=0 AND cancelada=0")[0]["n"]
+        return self._linhas("SELECT COUNT(DISTINCT processo_id||'|'||grupo) AS n FROM publicacoes "
+                            "WHERE situacao='nova' AND cancelada=0")[0]["n"]
 
     def total_mov_novos(self):
         return self._linhas("SELECT COUNT(DISTINCT processo_id) AS n FROM movimentos WHERE visto=0")[0]["n"]

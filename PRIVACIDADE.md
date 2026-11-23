@@ -40,3 +40,7 @@ POLÍTICA DE PRIVACIDADE — MONITOR DE PROCESSOS
 
 7. Titular do programa: Felippe Alvarez de Sá. O tratamento de dados ocorre no computador do usuário, que é o responsável
    (controlador) pelos dados que cadastrar. Canal de contato: [PENDENTE DE DEFINIÇÃO]
+5-C. Equipe e publicações (v0.6). O programa passa a guardar, para cada publicação, a situação (nova, em análise ou tratada), o NOME do usuário que a
+   alterou e quando, além do usuário responsável por cada processo. O e-mail de um usuário é usado, se o envio de alertas estiver ligado, para
+   avisá-lo das publicações dos processos sob sua responsabilidade. O cálculo de prazo não grava nada. Esses dados ficam só na pasta de dados do servidor.
+

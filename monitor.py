@@ -9,6 +9,7 @@ Princípios (v0.1.1):
 """
 import datetime as dt
 import logging
+import re
 import threading
 import time
 
@@ -303,6 +304,7 @@ class Monitor:
             except Exception as e:  # noqa: BLE001
                 email = f"falhou: {e}"
                 log.warning("Falha ao enviar e-mail: %s", e)
+            self._avisar_responsaveis(pubs_por_proc, cfg_email)
         elif cfg_email.get("ativo"):
             email = "sem novidades"
         pendentes_restantes = ctx["total"] - ctx["feitos"]
@@ -384,6 +386,7 @@ class Monitor:
             except Exception as e:  # noqa: BLE001
                 resumo["email"] = f"falhou: {e}"
                 log.warning("Falha ao enviar e-mail (OAB): %s", e)
+            self._avisar_responsaveis(pubs_cadastradas, cfg_email)
         elif cfg_email.get("ativo"):
             resumo["email"] = "sem novidades"
         self.resumo_oab = resumo
@@ -672,6 +675,30 @@ class Monitor:
             self._dormir(espera)
 
     # ---------------------------------------------------------------- e-mail
+    def _avisar_responsaveis(self, pubs_por_proc, cfg_email):
+        """v0.6: cada responsável recebe, por e-mail, as publicações novas dos processos sob sua responsabilidade
+        (além do e-mail geral). Quem já está entre os destinatários do e-mail geral não recebe duas vezes."""
+        por_resp = {}
+        for p, pubs in pubs_por_proc:
+            uid = p.get("responsavel_id")
+            if uid and pubs:
+                por_resp.setdefault(uid, []).append((p, pubs))
+        if not por_resp:
+            return
+        gerais = {x.strip().lower() for x in re.split(r"[;,]", cfg_email.get("destinatario", "")) if x.strip()}
+        for uid, lista in por_resp.items():
+            u = self.banco.email_do_responsavel(uid)
+            if not u or u["email"].strip().lower() in gerais:
+                continue
+            n = sum(len(x) for _, x in lista)
+            try:
+                mailer.enviar({**cfg_email, "destinatario": u["email"]},
+                              f"[Monitor de Processos] {n} publicação(ões) nova(s) em processo(s) sob sua responsabilidade",
+                              f"Olá, {u['nome']}.\n\nPublicações novas em processos pelos quais você é responsável:\n\n"
+                              + self.montar_email([], lista))
+            except Exception as e:  # noqa: BLE001
+                log.warning("Falha ao enviar e-mail ao responsável %s: %s", u["nome"], e)
+
     @staticmethod
     def montar_email(novos_por_proc, pubs_por_proc=()):
         linhas = []
@@ -683,7 +710,9 @@ class Monitor:
                 for b in pubs:
                     d = b["data_disp"]
                     data = f"{d[8:10]}/{d[5:7]}/{d[0:4]}" if len(d) >= 10 else d
-                    linhas.append(f"  • Disponibilizada em {data} — {b['orgao']} — {b['tipo_doc'] or b['tipo_com']}")
+                    copias = b.get("copias", 1)
+                    linhas.append(f"  • Disponibilizada em {data} — {b['orgao']} — {b['tipo_doc'] or b['tipo_com']}"
+                                  + (f" — {copias} cópias iguais (destinatários diferentes)" if copias > 1 else ""))
                     texto = " ".join(b["texto"].split())
                     linhas.append("    " + (texto[:700] + "…" if len(texto) > 700 else texto))
                 linhas.append("")

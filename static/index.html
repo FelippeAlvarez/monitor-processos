@@ -85,7 +85,8 @@
   html[data-estilo="classico"] #login .topo { border-bottom:4px solid var(--gold); }
   #login.hide { display:none; }
   /* diálogos próprios */
-  dialog { border:1px solid var(--bd); border-radius:var(--rad); background:var(--card); color:var(--tx); max-width:440px; width:calc(100% - 32px); box-shadow:0 16px 48px rgba(10,15,35,.35); }
+  dialog { border:1px solid var(--bd); border-radius:var(--rad); background:var(--card); color:var(--tx); max-width:440px; width:calc(100% - 32px); max-height:90vh; overflow:auto; box-shadow:0 16px 48px rgba(10,15,35,.35); }
+  #d-prazo { max-width:520px; }
   dialog::backdrop { background:rgba(10,15,25,.55); }
   #d-conf p { white-space:pre-wrap; margin:0 0 12px; }
   #msg { position:fixed; bottom:16px; right:16px; background:var(--tx); color:var(--bg); padding:10px 14px; border-radius:10px; max-width:380px; display:none; box-shadow:0 8px 24px rgba(10,15,35,.3); }
@@ -156,6 +157,24 @@
   <label for="dm-obs">Observação (opcional)</label><input id="dm-obs" maxlength="120">
   <div class="acoes" style="margin-top:12px"><button class="b" type="button" id="dm-ok">Monitorar</button><button class="b sec" type="button" id="dm-x">Cancelar</button></div>
 </form></dialog>
+<dialog id="d-resp"><form method="dialog">
+  <h3 style="margin-top:0">Responsável pelo processo</h3>
+  <p class="mut" id="dr-txt"></p>
+  <label for="dr-sel">Responsável</label><select id="dr-sel" style="width:100%;padding:8px"></select>
+  <p class="mut">O responsável recebe por e-mail as publicações novas dos seus processos (se tiver e-mail cadastrado e o envio de alertas estiver ligado).</p>
+  <div class="acoes" style="margin-top:12px"><button class="b" type="button" id="dr-ok">Salvar</button><button class="b sec" type="button" id="dr-x">Cancelar</button></div>
+</form></dialog>
+<dialog id="d-prazo"><form method="dialog">
+  <h3 style="margin-top:0">Calcular prazo (dias úteis)</h3>
+  <p class="mut" id="dz-proc"></p>
+  <p class="warn" style="font-size:13px" id="dz-aviso">Ferramenta de apoio: não substitui a conferência nos portais do tribunal nem a análise do advogado.</p>
+  <div class="grid2">
+    <div><label for="dz-data">Data de disponibilização no DJEN</label><input id="dz-data" type="date"></div>
+    <div><label for="dz-dias">Prazo, em dias úteis</label><input id="dz-dias" type="number" min="1" max="400" inputmode="numeric" placeholder="ex.: 15"></div>
+  </div>
+  <div class="acoes" style="margin-top:10px"><button class="b" type="button" id="dz-calc">Calcular</button><button class="b sec" type="button" id="dz-x">Fechar</button></div>
+  <div id="dz-res" class="hide" style="margin-top:12px"></div>
+</form></dialog>
 <header><div class="marca"><img class="lg" alt="ASA — Alvarez de Sá Advocacia"><span class="sep"></span><h1>Monitor de Processos <span class="mut" id="ver"></span></h1></div>
   <div class="usr hide" id="usr"><span class="av" id="usr-av"></span><span id="usr-nome"></span><button id="b-conta">Alterar senha</button><button id="b-sair">Sair</button></div></header>
 <div class="aviso"><b>Atenção:</b> movimentações vêm do DataJud (metadados, com defasagem) e publicações do DJEN (Comunica PJe).
@@ -197,6 +216,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <button class="b sec sm" id="b-mon-lote">Monitorar os da lista…</button>
     <button class="b sec sm" id="b-desmon-lote">Parar de monitorar os da lista…</button>
     <button class="b sec sm" id="b-inativos">Arquivar parados…</button>
+    <button class="b sec sm" id="b-resp-lote">Definir responsável dos da lista…</button>
   </div>
   <div class="card" style="padding:6px 10px; overflow-x:auto">
     <table><thead><tr><th>Processo</th><th>Última movimentação</th><th>Situação / DJEN</th><th></th></tr></thead>
@@ -210,12 +230,14 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
 <section id="t-publicacoes" class="hide">
   <div class="card">
     <div class="acoes">
-      <label style="margin:0"><input type="checkbox" id="p-novas" style="width:auto"> Mostrar só as não vistas</label>
-      <button class="b sec sm" id="b-pub-vistas">Marcar todas como vistas</button>
+      <label style="margin:0" for="p-sit">Situação</label>
+      <select id="p-sit"><option value="nova">Novas</option><option value="analise">Em análise</option><option value="tratada">Tratadas</option><option value="">Todas</option></select>
+      <button class="b sec sm" id="b-pub-vistas">Passar as novas para “em análise”</button>
       <span class="mut" id="p-info" style="align-self:center"></span>
     </div>
     <p class="mut">Publicações do Diário de Justiça Eletrônico Nacional (DJEN), consultadas pelo número do processo. Na primeira consulta de cada processo,
-    só as publicações dos últimos 15 dias contam como novas. Apoio à conferência: <b>a contagem de prazo é responsabilidade do advogado</b>, com base na publicação oficial.</p>
+    só as publicações dos últimos 15 dias contam como novas. A <b>situação</b> (nova, em análise, tratada) é compartilhada por toda a equipe: mostra quem mudou e quando.
+    Cópias idênticas da mesma publicação (comum na Justiça do Trabalho) aparecem <b>uma vez só</b>, com o número de cópias. Apoio à conferência: <b>a contagem de prazo é responsabilidade do advogado</b>, com base na publicação oficial.</p>
   </div>
   <div id="p-lista"></div>
 </section>
@@ -358,6 +380,18 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     Só funciona se houver ao menos um filtro do tipo OAB na aba Filtros.</p>
     <label for="m-dias" style="margin-top:8px">“Publicação recente” = nos últimos quantos dias (30 a 1095)</label>
     <input id="m-dias" type="number" min="30" max="1095" style="max-width:160px">
+  </div>
+  <div class="card">
+    <b>Cálculo de prazo</b>
+    <p class="mut">Só são considerados os <b>feriados nacionais</b> (Lei 662/1949, Lei 6.802/1980 e Lei 14.759/2023). Feriados estaduais, municipais, Carnaval, Semana Santa, Corpus Christi e suspensões por ato do tribunal
+    <b>não entram sozinhos</b>: cadastre aqui os que quiser considerar (isso pode alongar o prazo calculado).</p>
+    <label for="z-extras">Feriados extras — um por linha: AAAA-MM-DD nome (ex.: 2027-02-09 Carnaval)</label>
+    <textarea id="z-extras" rows="4" style="width:100%"></textarea>
+    <label><input type="checkbox" id="z-rec" style="width:auto"> Considerar o recesso de fim de ano (CPC art. 220: de 20/12 a 20/01, inclusive)</label>
+    <div class="grid2">
+      <div><label for="z-ini">Início do recesso (MM-DD)</label><input id="z-ini" maxlength="5" placeholder="12-20"></div>
+      <div><label for="z-fim">Fim do recesso (MM-DD, inclusive)</label><input id="z-fim" maxlength="5" placeholder="01-20"></div>
+    </div>
   </div>
   <div class="card">
     <label><input type="checkbox" id="e-ativo" style="width:auto"> Enviar alerta por e-mail quando houver movimentação nova</label>
@@ -548,15 +582,15 @@ function renderLista() {
               : p.oab_status === "sem" ? `<br><span class="warn" style="font-size:13px">OAB não consta nas publicações deste processo</span>` : "";
     const avisoHtml = p.aviso ? `<div class="warn" style="font-size:13px;margin-top:4px">⚠ ${esc(p.aviso)} <button class="b sm sec" data-disp="${p.id}">Dispensar</button></div>` : "";
     return `<tr>
-      <td>${p.apelido ? `<b>${esc(p.apelido)}</b> ` : ""}${p.ativo ? "" : '<span class="tag">arquivado</span> '}${mon}${p.novos ? `<span class="badge">${p.novos} mov. nova(s)</span> ` : ""}${p.pub_novas ? `<span class="badge">${p.pub_novas} publ. nova(s)</span>` : ""}${p.apelido || !p.ativo || p.monitorar || p.novos || p.pub_novas ? "<br>" : ""}
-        <span class="num">${esc(p.numero)}</span>${p.motivo_obs ? ` <span class="mut">— ${esc(p.motivo_obs)}</span>` : ""}${oab}${avisoHtml}${p.cliente || p.pasta ? `<br><span class="mut">${esc(p.cliente)}${p.pasta ? " · pasta " + esc(p.pasta) : ""}</span>` : ""}</td>
+      <td>${p.apelido ? `<b>${esc(p.apelido)}</b> ` : ""}${p.ativo ? "" : '<span class="tag">arquivado</span> '}${mon}${p.novos ? `<span class="badge">${p.novos} mov. nova(s)</span> ` : ""}${p.pub_novas ? `<span class="badge">${p.pub_novas} publ. nova(s)</span> ` : ""}${p.pub_analise ? `<span class="tag">${p.pub_analise} em análise</span>` : ""}${p.apelido || !p.ativo || p.monitorar || p.novos || p.pub_novas || p.pub_analise ? "<br>" : ""}
+        <span class="num">${esc(p.numero)}</span>${p.motivo_obs ? ` <span class="mut">— ${esc(p.motivo_obs)}</span>` : ""}${oab}${avisoHtml}${p.cliente || p.pasta ? `<br><span class="mut">${esc(p.cliente)}${p.pasta ? " · pasta " + esc(p.pasta) : ""}</span>` : ""}${p.responsavel_nome ? `<br><span class="mut">Responsável: ${esc(p.responsavel_nome)}</span>` : ""}</td>
       <td>${esc(p.ultimo_mov || "—")}<br><span class="mut">${fmt(p.ultimo_mov_data)}${p.classe ? " · " + esc(p.classe) : ""}</span>
         ${p.ultima_atualizacao ? `<br><span class="mut">registro do CNJ atualizado em ${fmt(p.ultima_atualizacao)}</span>` : ""}</td>
       <td><span class="st ${cls}">${txt}</span>${p.mensagem ? `<br><span class="mut">${esc(p.mensagem)}</span>` : ""}<br>${p.ultima_consulta ? `<br><span class="mut">consultado: ${fmtUtc(p.ultima_consulta)}</span>` : ""}
         <br><span class="mut">DJEN: ${DJE[p.dje_status] || "—"}${p.pub_total ? ` · ${p.pub_total} publ.${p.pub_ultima ? ", última em " + fmt(p.pub_ultima) : ""}` : ""}</span>${p.dje_status === "erro" && p.dje_mensagem ? `<br><span class="err" style="font-size:13px">${esc(p.dje_mensagem)}</span>` : ""}</td>
       <td><div class="acoes">
         <button class="b sm sec" data-ver="${p.id}">Movimentos</button>
-        ${p.ativo ? `<button class="b sm sec" data-upd="${p.id}">Atualizar</button><button class="b sm sec" data-mon="${p.id}" data-m="${p.monitorar ? 0 : 1}">${p.monitorar ? "Parar de monitorar" : "Monitorar"}</button><button class="b sm sec" data-arq="${p.id}" data-a="0">Arquivar</button>`
+        ${p.ativo ? `<button class="b sm sec" data-resp="${p.id}">Responsável</button><button class="b sm sec" data-upd="${p.id}">Atualizar</button><button class="b sm sec" data-mon="${p.id}" data-m="${p.monitorar ? 0 : 1}">${p.monitorar ? "Parar de monitorar" : "Monitorar"}</button><button class="b sm sec" data-arq="${p.id}" data-a="0">Arquivar</button>`
                   : `<button class="b sm sec" data-arq="${p.id}" data-a="1">Reativar</button>`}
         <button class="b sm dg" data-del="${p.id}">Remover</button></div></td></tr>`;
   }).join("");
@@ -592,6 +626,30 @@ $("#b-desmon-lote").onclick = async () => {
   if (!await confirmar(`Parar de monitorar diariamente ${ids.length} processo(s)? Eles continuam cadastrados e recebem as publicações pelo filtro de OAB; a automação não os incluirá de novo.`, { titulo: "Parar de monitorar", ok: "Parar de monitorar" })) return;
   try { const r = await api("/api/processos/monitorar", "POST", { ids, monitorar: false }); aviso(`${r.alterados} processo(s) fora do monitoramento diário.`); carregarLista(); } catch (e) { aviso(e.message); }
 };
+// responsável por processo (um ou vários)
+const dResp = $("#d-resp");
+async function pedirResponsavel(ids) {
+  const equipe = await api("/api/equipe");
+  $("#dr-sel").innerHTML = '<option value="">(ninguém)</option>' + equipe.map(u => `<option value="${u.id}">${esc(u.nome)}</option>`).join("");
+  if (ids.length === 1) { const p = LISTA.find(x => x.id === ids[0]); $("#dr-sel").value = p && p.responsavel_id ? String(p.responsavel_id) : ""; }
+  $("#dr-txt").textContent = ids.length === 1 ? "Quem acompanha este processo na equipe." : `${ids.length} processos receberão o mesmo responsável (o anterior será substituído).`;
+  return new Promise((ok) => {
+    dResp.showModal();
+    $("#dr-x").onclick = () => { dResp.close(); ok(false); };
+    $("#dr-ok").onclick = async () => {
+      try {
+        const r = await api("/api/processos/responsavel", "POST", { ids, responsavel_id: $("#dr-sel").value || null });
+        dResp.close(); aviso(`${r.alterados} processo(s) atualizado(s).`); carregarLista(); ok(true);
+      } catch (e) { aviso(e.message); }
+    };
+  });
+}
+$("#b-resp-lote").onclick = async () => {
+  const ids = FILTRADOS.filter(p => p.ativo).map(p => p.id);
+  if (!ids.length) { aviso("Nenhum processo na lista atual."); return; }
+  if (ids.length > 5000) { aviso("Filtre melhor: no máximo 5000 por vez."); return; }
+  await pedirResponsavel(ids);
+};
 $("#b-inativos").onclick = async () => {
   try {
     const m = await perguntar("Arquivar os processos sem NENHUMA movimentação nem publicação há mais de quantos meses?", "12", { titulo: "Arquivar parados" });
@@ -612,6 +670,7 @@ $("#lista").onclick = async (e) => {
       if (b.dataset.m === "1") await pedirMonitorar([Number(b.dataset.mon)]);
       else { await api("/api/processos/monitorar", "POST", { ids: [Number(b.dataset.mon)], monitorar: false }); aviso("Processo fora do monitoramento diário."); carregarLista(); }
     }
+    if (b.dataset.resp) await pedirResponsavel([Number(b.dataset.resp)]);
     if (b.dataset.upd) { await api(`/api/processos/${b.dataset.upd}/consultar`, "POST", {}); aviso("Processo colocado na fila de consulta."); status(); }
     if (b.dataset.arq) { await api("/api/processos/ativo", "POST", { ids: [Number(b.dataset.arq)], ativo: b.dataset.a === "1" }); carregarLista(); }
     if (b.dataset.del && await confirmar("Remover este processo e o histórico guardado? Esta ação não pode ser desfeita.", { titulo: "Remover processo", ok: "Remover", perigo: true })) { await api(`/api/processos/${b.dataset.del}`, "DELETE"); carregarLista(); }
@@ -670,24 +729,62 @@ async function status() {
 
 // publicações
 function lista(json) { try { return JSON.parse(json || "[]"); } catch (e) { return []; } }
+const SIT_PUB = { nova: "Nova", analise: "Em análise", tratada: "Tratada" };
+let PUBS = [];
 async function carregarPublicacoes() {
-  const so = $("#p-novas").checked;
-  const pubs = await api("/api/publicacoes" + (so ? "?novas=1" : ""));
+  const sit = $("#p-sit").value;
+  const pubs = await api("/api/publicacoes" + (sit ? "?situacao=" + sit : ""));
+  PUBS = pubs;
   $("#p-info").textContent = pubs.length + " publicação(ões)" + (pubs.length >= 300 ? " (mostrando as 300 mais recentes)" : "");
-  $("#p-lista").innerHTML = pubs.length ? pubs.map(b => {
+  $("#p-lista").innerHTML = pubs.length ? pubs.map((b, i) => {
     const advs = lista(b.advogados).map(a => `${esc(a.nome)} (OAB ${esc(a.oab)})`).join("; ");
-    const dest = lista(b.destinatarios).map(d => esc(d.nome) + (d.polo ? " [" + esc(d.polo) + "]" : "")).join("; ");
-    return `<div class="pub ${b.visto ? "" : "n"} ${b.cancelada ? "c" : ""}">
+    const dest = (b.destinatarios_uniao || []).map(d => esc(d.nome) + (d.polo ? " [" + esc(d.polo) + "]" : "")).join("; ");
+    const copias = b.copias > 1 ? `<span class="tag" title="Cópias idênticas: só os destinatários mudam">×${b.copias} cópias</span> ` : "";
+    const quem = b.situacao_em ? ` <span class="mut">— ${esc(b.situacao_por || "")} ${b.situacao_por ? "em " : ""}${fmtUtc(b.situacao_em)}</span>` : "";
+    const intim = (b.intimados || []).length && b.copias > 1
+      ? `<details><summary class="mut">Intimados em cada cópia (${b.intimados.length})</summary>${b.intimados.map(t => `<div class="mut" style="margin:4px 0">• ${esc(t)}</div>`).join("")}</details>` : "";
+    return `<div class="pub ${b.situacao === "nova" ? "n" : ""} ${b.cancelada ? "c" : ""}">
       <div class="acoes" style="justify-content:space-between"><span><b>${fmt(b.data_disp)}</b> · ${esc(b.tipo_com)}${b.tipo_doc ? " · " + esc(b.tipo_doc) : ""}
-        ${b.visto ? "" : '<span class="badge">nova</span>'} ${b.cancelada ? '<span class="tag">cancelada/inativa</span>' : ""}</span>
+        ${copias}${b.cancelada ? '<span class="tag">cancelada/inativa</span>' : ""}</span>
         <span class="num">${esc(b.numero)}</span></div>
-      <div class="mut">${b.apelido ? esc(b.apelido) + " · " : ""}${b.cliente ? esc(b.cliente) + " · " : ""}${esc(b.orgao)}${b.classe ? " · " + esc(b.classe) : ""}</div>
-      ${dest ? `<div class="mut">Destinatários: ${dest}</div>` : ""}${advs ? `<div class="mut">Advogados: ${advs}</div>` : ""}
+      <div class="mut">${b.apelido ? esc(b.apelido) + " · " : ""}${b.cliente ? esc(b.cliente) + " · " : ""}${esc(b.orgao)}${b.classe ? " · " + esc(b.classe) : ""}${b.responsavel_nome ? " · responsável: " + esc(b.responsavel_nome) : ""}</div>
+      ${dest ? `<div class="mut">Destinatários: ${dest}</div>` : ""}${advs ? `<div class="mut">Advogados: ${advs}</div>` : ""}${intim}
       <div class="tx">${esc(b.texto)}</div>
+      <div class="acoes" style="margin-top:8px"><label style="margin:0" for="ps-${i}">Situação</label>
+        <select id="ps-${i}" data-sit="${i}">${Object.entries(SIT_PUB).map(([k, v]) => `<option value="${k}" ${k === b.situacao ? "selected" : ""}>${v}</option>`).join("")}</select>${quem}
+        <button class="b sm sec" data-prazo="${i}">Calcular prazo</button></div>
       <div class="mut" style="margin-top:6px">${esc(b.meio)}</div></div>`;
   }).join("") : '<div class="card mut">Nenhuma publicação para exibir.</div>';
 }
-$("#p-novas").onchange = carregarPublicacoes;
+$("#p-sit").onchange = carregarPublicacoes;
+$("#p-lista").onchange = async (e) => {
+  const sel = e.target.closest("select[data-sit]"); if (!sel) return;
+  const b = PUBS[Number(sel.dataset.sit)];
+  try { await api("/api/publicacoes/situacao", "POST", { processo_id: b.processo_id, grupo: b.grupo, situacao: sel.value }); aviso("Situação atualizada para toda a equipe."); carregarPublicacoes(); carregarLista(); }
+  catch (err) { aviso(err.message); carregarPublicacoes(); }
+};
+// calcular prazo
+const dPrazo = $("#d-prazo");
+$("#p-lista").onclick = (e) => {
+  const bt = e.target.closest("button[data-prazo]"); if (!bt) return;
+  const b = PUBS[Number(bt.dataset.prazo)];
+  $("#dz-proc").textContent = `${b.numero}${b.apelido ? " · " + b.apelido : ""} — publicação disponibilizada em ${fmt(b.data_disp)}`;
+  $("#dz-data").value = (b.data_disp || "").slice(0, 10); $("#dz-dias").value = "";
+  $("#dz-res").classList.add("hide"); $("#dz-res").innerHTML = "";
+  dPrazo.showModal(); $("#dz-dias").focus();
+};
+$("#dz-x").onclick = () => dPrazo.close();
+["#dz-dias", "#dz-data"].forEach(i => $(i).onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("#dz-calc").click(); } });
+$("#dz-calc").onclick = async () => {
+  try {
+    const r = await api("/api/prazo", "POST", { data: $("#dz-data").value, dias: Number($("#dz-dias").value) });
+    const dsem = (iso) => { const [a, m, d] = iso.split("-").map(Number); return ["domingo","segunda-feira","terça-feira","quarta-feira","quinta-feira","sexta-feira","sábado"][new Date(a, m - 1, d).getDay()]; };
+    $("#dz-res").innerHTML = `<div class="card dest d-ok"><span class="mut">Vencimento (${r.dias} dias úteis)</span><b style="font-size:20px;display:block">${fmt(r.vencimento)} (${dsem(r.vencimento)})</b></div>
+      <details open><summary><b>Memória de cálculo</b></summary><ol style="margin:6px 0 0 18px;padding:0">${r.memoria.map(m => `<li style="margin:4px 0">${esc(m)}</li>`).join("")}</ol></details>`;
+    $("#dz-res").classList.remove("hide");
+    $("#dz-aviso").textContent = r.aviso;
+  } catch (err) { $("#dz-res").innerHTML = `<span class="err">${esc(err.message)}</span>`; $("#dz-res").classList.remove("hide"); }
+};
 $("#b-pub-vistas").onclick = async () => { try { await api("/api/publicacoes/visto", "POST", {}); carregarPublicacoes(); carregarLista(); } catch (e) { aviso(e.message); } };
 
 // OAB
@@ -850,6 +947,8 @@ async function carregarConfig() {
   const v = c.varredura; $("#v-ativa").checked = v.ativa; $("#v-bloco").value = v.bloco; $("#v-int").value = v.intervalo_min; $("#v-ini").value = v.inicio;
   capacidade();
   $("#m-auto").checked = c.monitoramento.auto_sem_oab; $("#m-dias").value = c.monitoramento.auto_dias;
+  const pz = c.prazos || { feriados_extras: [], recesso: { ativo: true, inicio: "12-20", fim: "01-20" } };
+  $("#z-extras").value = (pz.feriados_extras || []).join("\n"); $("#z-rec").checked = pz.recesso.ativo; $("#z-ini").value = pz.recesso.inicio; $("#z-fim").value = pz.recesso.fim;
   const e = c.email;
   $("#e-ativo").checked = e.ativo; $("#e-host").value = e.smtp_host; $("#e-porta").value = e.smtp_porta;
   $("#e-user").value = e.usuario; $("#e-rem").value = e.remetente; $("#e-dest").value = e.destinatario;
@@ -883,6 +982,7 @@ $("#b-cfg").onclick = async () => {
     await api("/api/config", "POST", { api_key: $("#k-key").value, dje_ativo: $("#k-dje").checked, intervalo_horas: $("#k-int").value,
       varredura: { ativa: $("#v-ativa").checked, bloco: $("#v-bloco").value, intervalo_min: $("#v-int").value, inicio: $("#v-ini").value },
       monitoramento: { auto_sem_oab: $("#m-auto").checked, auto_dias: $("#m-dias").value },
+      prazos: { feriados_extras: $("#z-extras").value, recesso: { ativo: $("#z-rec").checked, inicio: $("#z-ini").value, fim: $("#z-fim").value } },
       email: { ativo: $("#e-ativo").checked, smtp_host: $("#e-host").value, smtp_porta: $("#e-porta").value, usuario: $("#e-user").value,
                senha: $("#e-senha").value, remetente: $("#e-rem").value, destinatario: $("#e-dest").value } });
     aviso("Configurações salvas."); carregarConfig();
