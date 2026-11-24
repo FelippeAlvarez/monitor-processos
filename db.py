@@ -6,6 +6,7 @@ import sqlite3
 import threading
 
 import agenda
+import historico
 import agrupar
 
 SCHEMA = """
@@ -168,6 +169,7 @@ class Banco:
         self._migrar()
         self.conn.commit()
         agenda.migrar(self)
+        historico.migrar(self)
 
     def _migrar(self):
         """v0.1.1: 'baseline_feito' registra se a 1ª consulta bem-sucedida já ocorreu.

@@ -25,6 +25,7 @@ from urllib.parse import parse_qs, urlparse
 
 import auth
 import agenda
+import historico
 import prazos
 import backup
 import datajud
@@ -280,6 +281,68 @@ def r_calendario_dias(h):
             out.append({"dia": d.isoformat(), "feriado": f or "", "recesso": r})
         d += dt.timedelta(days=1)
     h.json(out)
+
+
+def _pid_ok(h, pid):
+    p = CTX.banco.obter(int(pid))
+    if not p:
+        h.json({"erro": "Processo não encontrado."}, 404)
+    return p
+
+
+def r_historico(h, pid):
+    """v0.7.1: linha do tempo única do processo (andamentos, publicações, eventos, anotações), paginada."""
+    p = _pid_ok(h, pid)
+    if not p:
+        return
+    q = parse_qs(urlparse(h.path).query)
+    g = lambda k: (q.get(k) or [""])[0].strip()  # noqa: E731
+    fontes = [x for x in _lista(q, "fonte") if x in historico.FONTES]
+    try:
+        limite = int(g("limite") or 40)
+        itens, proximo = historico.linha(CTX.banco, int(pid), fontes or None, g("de"), g("ate"), g("q"), g("antes") or None, limite)
+    except (ValueError, agenda.ErroAgenda) as e:
+        return h.json({"erro": str(e) if isinstance(e, agenda.ErroAgenda) else "Parâmetro inválido."}, 400)
+    out = {"itens": itens, "proximo": proximo}
+    if not g("antes"):
+        out["processo"] = {k: p.get(k) for k in ("id", "numero", "apelido", "cliente", "pasta", "alias", "status", "ativo", "monitorar", "responsavel_id", "ultima_consulta")}
+        out["contagens"] = historico.contagens(CTX.banco, int(pid))
+    h.json(out)
+
+
+def r_anotacao_add(h, pid):
+    if not _pid_ok(h, pid):
+        return
+    try:
+        aid = historico.criar_anotacao(CTX.banco, int(pid), h.corpo().get("texto"), h.usuario["nome"])
+    except agenda.ErroAgenda as e:
+        return _erro_agenda(h, e)
+    h.auditar("anotacao_criada", f"#{aid} no processo {pid}")
+    h.json({"ok": True, "id": aid})
+
+
+def r_anotacao_edit(h, aid):
+    c = h.corpo()
+    a = historico.obter_anotacao(CTX.banco, int(aid))
+    if a and h.usuario["perfil"] != "admin" and a["criado_por"] != h.usuario["nome"]:
+        return h.json({"erro": "Só o administrador ou quem escreveu a anotação pode editá-la."}, 403)
+    try:
+        v = historico.editar_anotacao(CTX.banco, int(aid), c.get("texto"), c.get("versao"), h.usuario["nome"])
+    except agenda.ErroAgenda as e:
+        return _erro_agenda(h, e)
+    h.auditar("anotacao_alterada", f"#{aid}")
+    h.json({"ok": True, "versao": v})
+
+
+def r_anotacao_del(h, aid):
+    a = historico.obter_anotacao(CTX.banco, int(aid))
+    if not a:
+        return h.json({"erro": "Anotação não encontrada."}, 404)
+    if h.usuario["perfil"] != "admin" and a["criado_por"] != h.usuario["nome"]:
+        return h.json({"erro": "Só o administrador ou quem escreveu a anotação pode excluí-la."}, 403)
+    historico.excluir_anotacao(CTX.banco, int(aid))
+    h.auditar("anotacao_excluida", f"#{aid} (processo {a['processo_id']})")
+    h.json({"ok": True})
 
 
 def r_publicacoes(h):
@@ -865,6 +928,10 @@ ROTAS = [
     ("POST", r"/api/eventos/(\d+)/situacao", r_evento_situacao, "usu"),
     ("DELETE", r"/api/eventos/(\d+)", r_evento_del, "usu"),
     ("GET", r"/api/calendario/dias", r_calendario_dias, "usu"),
+    ("GET", r"/api/processos/(\d+)/historico", r_historico, "usu"),
+    ("POST", r"/api/processos/(\d+)/anotacoes", r_anotacao_add, "usu"),
+    ("POST", r"/api/anotacoes/(\d+)", r_anotacao_edit, "usu"),
+    ("DELETE", r"/api/anotacoes/(\d+)", r_anotacao_del, "usu"),
     ("POST", r"/api/consultar", r_consultar_todos, "usu"),
     ("POST", r"/api/consultar-dje", r_consultar_dje, "usu"),
     ("GET", r"/api/log", r_log, "adm"),

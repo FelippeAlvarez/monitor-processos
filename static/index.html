@@ -132,6 +132,17 @@
   .linha2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
   .linha3 { display:grid; grid-template-columns:1.2fr 1fr 1.4fr; gap:10px; }
   @media (max-width:640px){ .linha2,.linha3 { grid-template-columns:1fr; } .cal-dia { min-height:64px; } .ev { font-size:11px; } }
+  /* histórico (v0.7.1) */
+  .tl { position:relative; margin:10px 0 0 8px; padding-left:20px; border-left:2px solid var(--bd); }
+  .tl .it { position:relative; margin:0 0 10px; padding:8px 10px; border:1px solid var(--bd); border-radius:8px; background:var(--card); }
+  .tl .it::before { content:""; position:absolute; left:-28px; top:14px; width:10px; height:10px; border-radius:50%; background:var(--c,var(--ac)); border:2px solid var(--bg); }
+  .tl .it .cab { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .tl .it .tx { white-space:pre-wrap; margin-top:4px; font-size:14px; }
+  .tl .it .tx.cur { max-height:4.4em; overflow:hidden; }
+  .tl .it.cancelado, .tl .it.concluido { opacity:.65; }
+  .tl .src { font-size:12px; font-weight:600; letter-spacing:.02em; text-transform:uppercase; }
+  .tl-mes { margin:16px 0 6px -8px; font-weight:600; color:var(--mut); }
+  .hc { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   dialog::backdrop { background:rgba(10,15,25,.55); }
   #d-conf p { white-space:pre-wrap; margin:0 0 12px; }
   #msg { position:fixed; bottom:16px; right:16px; background:var(--tx); color:var(--bg); padding:10px 14px; border-radius:10px; max-width:380px; display:none; box-shadow:0 8px 24px rgba(10,15,35,.3); }
@@ -267,6 +278,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
 <nav id="nav">
   <button data-t="inicio" class="on">Início</button>
   <button data-t="painel">Processos</button>
+  <button data-t="historico">Histórico</button>
   <button data-t="calendario">Calendário <span class="badge hide" id="nav-cal"></span></button>
   <button data-t="publicacoes">Publicações <span class="badge hide" id="nav-pub"></span></button>
   <button data-t="oab">Filtros <span class="badge hide" id="nav-oab"></span></button>
@@ -300,6 +312,28 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <div class="card"><b>Atenção</b><div id="i-aten"></div></div>
   </div>
   <p class="mut" style="font-size:12.5px">Os números contam só processos ativos. Publicações iguais enviadas a várias partes contam uma vez. Andamentos vêm do DataJud (com defasagem); o gráfico usa a data do andamento/da disponibilização.</p>
+</section>
+<section id="t-historico" class="hide">
+  <div class="cal-bar">
+    <div style="flex:1;min-width:260px"><label for="h-proc">Processo</label><input id="h-proc" list="dl-proc" style="width:100%" placeholder="digite número, apelido ou cliente e escolha na lista" autocomplete="off"></div>
+    <button class="b sec sm" id="h-limpar" type="button">Limpar filtros</button>
+  </div>
+  <div id="h-vazio" class="card mut">Escolha um processo para ver, numa só linha do tempo, os andamentos (DataJud), as publicações (DJEN), os compromissos da agenda e as anotações internas.</div>
+  <div id="h-corpo" class="hide">
+    <div class="card" id="h-cab"></div>
+    <div class="cal-bar" style="margin-top:10px">
+      <div><label>Mostrar</label><div class="lemb" id="h-fontes"></div></div>
+      <div><label for="h-de">De</label><input type="date" id="h-de"></div>
+      <div><label for="h-ate">Até</label><input type="date" id="h-ate"></div>
+      <div style="flex:1;min-width:180px"><label for="h-q">Texto</label><input id="h-q" style="width:100%" placeholder="buscar no teor" autocomplete="off"></div>
+    </div>
+    <div class="card" id="h-nova" style="margin-bottom:10px"><label for="h-anot">Nova anotação interna (visível só à equipe; entra no histórico com a data de hoje)</label>
+      <textarea id="h-anot" rows="2" style="width:100%" maxlength="4000" placeholder="ex.: Cliente autorizou proposta de acordo até R$ …; ligar ao síndico na segunda."></textarea>
+      <div class="acoes" style="margin-top:6px"><button class="b sm" id="h-anot-ok" type="button">Salvar anotação</button><button class="b sm sec" id="h-agendar" type="button">+ Agendar compromisso</button></div></div>
+    <div id="h-lista" class="tl"></div>
+    <div class="acoes" style="margin-top:6px"><button class="b sec" id="h-mais" type="button">Carregar mais antigos</button></div>
+  </div>
+  <p class="mut" style="font-size:12.5px">Andamentos vêm do DataJud (com defasagem) e publicações do DJEN; publicações idênticas aparecem uma vez. Esta tela só mostra o que o programa já guardou — nada é consultado ao CNJ ao abrir. As datas e prazos agendados são os informados pela equipe.</p>
 </section>
 <section id="t-calendario" class="hide">
   <div class="cal-bar">
@@ -726,7 +760,7 @@ async function carregarDashboard() {
 $("#i-f-limpar").onclick = () => { $("#i-f-dias").value = "14"; $("#i-f-resp").value = ""; $("#i-f-cli").value = ""; carregarDashboard(); };
 $("#t-inicio").onclick = (e) => {
   const c = e.target.closest("[data-ir]"); if (c) { e.preventDefault(); irPara(c.dataset.ir, c.dataset.f); return; }
-  const m = e.target.closest("[data-mov]"); if (m) { irPara("painel"); verMovimentos(m.dataset.mov); return; }
+  const m = e.target.closest("[data-mov]"); if (m) { abrirHistorico(Number(m.dataset.mov)); return; }
   const ag = e.target.closest("[data-ag]"); if (ag) { irPara("calendario"); abrirEvento(Number(ag.dataset.ag)); return; }
   const cl = e.target.closest("[data-cal]"); if (cl) { irPara("calendario"); return; }
   if (e.target.closest("[data-pub]")) irPara("publicacoes");
@@ -939,12 +973,87 @@ function desenharAgendaInicio(a) {
   $("#i-ag-lista").innerHTML = a.lista.length ? `<ul class="lst">${a.lista.map(x => `<li data-ag="${x.id}"><div class="t"><b class="${x.atrasado ? "err" : ""}">${esc(x.titulo)}</b><span class="${x.atrasado ? "err" : "mut"}">${dataBr(x.data)}${x.hora ? " " + x.hora : ""}${x.data === hoje ? " (hoje)" : ""}</span></div><div class="mut"><span class="tp-pt" style="--c:${x.tipo_cor}"></span>${esc(x.tipo_nome)}${x.processo_numero ? " · " + esc(x.processo_apelido || x.processo_numero) : ""}${x.responsavel_nome ? " · " + esc(x.responsavel_nome) : ""}</div></li>`).join("")}</ul>` : '<p class="mut">Nenhum compromisso em aberto. Use a aba Calendário para agendar.</p>';
 }
 
+// ---- Histórico do processo (v0.7.1)
+const HIST = { pid: null, proximo: null, itens: [], cab: null, fontes: new Set(["andamento", "publicacao", "evento", "anotacao"]) };
+const FONTE_ROT = { andamento: ["Andamento", "var(--movcor)"], publicacao: ["Publicação DJEN", "var(--pubcor)"], evento: ["Agenda", "var(--ac)"], anotacao: ["Anotação", "var(--ok)"] };
+function histParams(antes) {
+  const p = new URLSearchParams({ limite: 40 });
+  if (HIST.fontes.size < 4) p.set("fonte", [...HIST.fontes].join(","));
+  if ($("#h-de").value) p.set("de", $("#h-de").value); if ($("#h-ate").value) p.set("ate", $("#h-ate").value);
+  if ($("#h-q").value.trim()) p.set("q", $("#h-q").value.trim()); if (antes) p.set("antes", antes);
+  return p;
+}
+async function abrirHistorico(pid) {
+  HIST.pid = pid; atualizarDatalist();
+  const p = LISTA.find(x => x.id === pid); $("#h-proc").value = p ? rotuloProc(p) : "";
+  irPara("historico");
+}
+async function carregarHistorico(mais) {
+  atualizarDatalist();
+  if (!HIST.pid) { $("#h-vazio").classList.remove("hide"); $("#h-corpo").classList.add("hide"); return; }
+  let d; try { d = await api(`/api/processos/${HIST.pid}/historico?` + histParams(mais ? HIST.proximo : null)); } catch (e) { aviso(e.message); return; }
+  $("#h-vazio").classList.add("hide"); $("#h-corpo").classList.remove("hide");
+  if (!mais) {
+    HIST.cab = d; HIST.itens = d.itens;
+    const p = d.processo, c = d.contagens;
+    $("#h-cab").innerHTML = `<div class="acoes" style="justify-content:space-between"><div><b style="font-size:16px">${esc(p.apelido || p.cliente || p.numero)}</b><br><span class="mut" style="font-family:monospace">${esc(p.numero)}</span>${p.cliente ? ` · ${esc(p.cliente)}` : ""}${p.pasta ? ` · pasta ${esc(p.pasta)}` : ""}</div>
+      <div class="hc"><span class="st">${c.andamento} andamento(s)</span><span class="st">${c.publicacao} publicação(ões)</span><span class="st">${c.evento} evento(s)</span><span class="st">${c.anotacao} anotação(ões)</span>${p.ativo ? "" : '<span class="st warn">arquivado</span>'}</div></div>`;
+    $("#h-fontes").innerHTML = Object.entries(FONTE_ROT).map(([k, [r]]) => `<label><input type="checkbox" value="${k}" ${HIST.fontes.has(k) ? "checked" : ""}>${r}</label>`).join("");
+  } else HIST.itens = HIST.itens.concat(d.itens);
+  HIST.proximo = d.proximo; $("#h-mais").classList.toggle("hide", !d.proximo);
+  desenharHistorico();
+}
+function itemHist(x) {
+  const [rot, cor] = FONTE_ROT[x.fonte], dt = x.quando, data = dataBr(dt.slice(0, 10)), hora = dt.slice(11, 16);
+  let cab = `<span><span class="src" style="color:${x.fonte === "evento" ? x.tipo_cor : cor}">${rot}${x.fonte === "evento" ? " · " + esc(x.tipo_nome) : ""}</span> <b class="${x.atrasado ? "err" : ""}">${esc(x.titulo)}</b>`;
+  if (x.fonte === "andamento" && x.novo) cab += ' <span class="st warn">novo</span>';
+  if (x.fonte === "publicacao") cab += (x.copias > 1 ? ` <span class="mut">×${x.copias}</span>` : "") + ` <span class="st ${x.situacao === "tratada" ? "ok" : (x.situacao === "nova" ? "err" : "warn")}">${{ nova: "nova", analise: "em análise", tratada: "tratada" }[x.situacao] || ""}</span>` + (x.cancelada ? ' <span class="st">cancelada</span>' : "");
+  if (x.fonte === "evento" && x.situacao !== "aberto") cab += ` <span class="st ${x.situacao === "concluido" ? "ok" : ""}">${x.situacao === "concluido" ? "concluído" : "cancelado"}</span>`;
+  if (x.fonte === "evento" && x.atrasado) cab += ' <span class="st err">vencido</span>';
+  if (x.fonte === "anotacao") cab += ` <span class="mut">— ${esc(x.por)}${x.editada ? " (editada)" : ""}</span>`;
+  cab += `</span><span class="mut">${data}${x.fonte === "publicacao" || (x.fonte === "evento" && !x.hora) ? "" : " " + hora}</span>`;
+  const longo = (x.texto || "").length > 380;
+  let tx = x.texto ? `<div class="tx ${longo ? "cur" : ""}" data-tx>${esc(x.texto)}</div>${longo ? '<button class="b sm sec" data-exp type="button" style="margin-top:4px">Ler tudo</button>' : ""}` : "";
+  if (x.fonte === "evento") tx = `<div class="mut">${x.hora ? x.hora + " · " : ""}${x.responsavel_nome ? esc(x.responsavel_nome) : "sem responsável"}${x.local ? " · " + esc(x.local) : ""}</div>` + tx;
+  let ac = "";
+  if (x.fonte === "evento") ac = `<button class="b sm sec" data-hev="${x.id}" type="button">Abrir</button>`;
+  if (x.fonte === "publicacao") ac = `<button class="b sm sec" data-hag="${x.id}" type="button">Agendar prazo</button>`;
+  if (x.fonte === "anotacao" && (EU.perfil === "admin" || x.criado_por === EU.nome)) ac = `<button class="b sm sec" data-hane="${x.id}" type="button">Editar</button><button class="b sm dg" data-hand="${x.id}" type="button">Excluir</button>`;
+  return `<div class="it ${x.fonte === "evento" && x.situacao !== "aberto" ? x.situacao : ""}" style="--c:${x.fonte === "evento" ? x.tipo_cor : cor}" data-k="${x.fonte}:${x.id}"><div class="cab">${cab}</div>${tx}${ac ? `<div class="acoes" style="margin-top:6px">${ac}</div>` : ""}</div>`;
+}
+function desenharHistorico() {
+  if (!HIST.itens.length) { $("#h-lista").innerHTML = '<p class="mut">Nada com os filtros atuais.</p>'; return; }
+  let mes = "", h = "";
+  HIST.itens.forEach(x => { const m = x.quando.slice(0, 7); if (m !== mes) { mes = m; h += `<div class="tl-mes">${MESES[Number(m.slice(5)) - 1]} de ${m.slice(0, 4)}</div>`; } h += itemHist(x); });
+  $("#h-lista").innerHTML = h;
+}
+$("#h-lista").onclick = async (e) => {
+  const b = e.target.closest("button"); if (!b) return; const it = HIST.itens.find(x => x.fonte + ":" + x.id === b.closest("[data-k]").dataset.k);
+  if (b.dataset.exp !== undefined) { const t = b.closest(".it").querySelector("[data-tx]"); t.classList.toggle("cur"); b.textContent = t.classList.contains("cur") ? "Ler tudo" : "Recolher"; return; }
+  if (b.dataset.hev) { irPara("calendario"); abrirEvento(Number(b.dataset.hev)); return; }
+  if (b.dataset.hag) { const tipo = CAL.tipos.find(t => /prazo fatal/i.test(t.nome)); await prepararAgenda(); const tp = CAL.tipos.find(t => /prazo fatal/i.test(t.nome) && t.ativo) || tipo;
+    irPara("calendario"); abrirEvento(null, { processo_id: HIST.pid, tipo_id: tp ? tp.id : undefined, titulo: "Prazo — " + (it.titulo || "publicação").slice(0, 80), descricao: `Publicação de ${dataBr(it.quando.slice(0, 10))} (${it.titulo}):\n` + (it.texto || "").slice(0, 600), lembretes: [3, 1, 0] }); return; }
+  if (b.dataset.hane) {
+    const novo = await perguntar("Editar anotação:", it.texto, { titulo: "Editar anotação", ok: "Salvar" }); if (novo === null) return;
+    try { await api("/api/anotacoes/" + it.id, "POST", { texto: novo, versao: it.versao }); aviso("Anotação atualizada."); carregarHistorico(); } catch (er) { aviso(er.message); } return; }
+  if (b.dataset.hand && await confirmar("Excluir esta anotação definitivamente?", { titulo: "Excluir anotação", ok: "Excluir", perigo: true })) { try { await api("/api/anotacoes/" + it.id, "DELETE"); carregarHistorico(); } catch (er) { aviso(er.message); } }
+};
+$("#h-anot-ok").onclick = async () => { if (!HIST.pid) return; try { await api(`/api/processos/${HIST.pid}/anotacoes`, "POST", { texto: $("#h-anot").value }); $("#h-anot").value = ""; aviso("Anotação salva."); carregarHistorico(); } catch (er) { aviso(er.message); } };
+$("#h-agendar").onclick = async () => { irPara("calendario"); abrirEvento(null, { processo_id: HIST.pid, data: hojeIso() }); };
+$("#h-mais").onclick = () => carregarHistorico(true);
+$("#h-proc").onchange = () => { const p = procPorRotulo($("#h-proc").value); if (p) { HIST.pid = p.id; carregarHistorico(); } else if (!$("#h-proc").value.trim()) { HIST.pid = null; carregarHistorico(); } else aviso("Processo não encontrado: escolha uma das opções sugeridas."); };
+$("#h-fontes").onchange = (e) => { e.target.checked ? HIST.fontes.add(e.target.value) : HIST.fontes.delete(e.target.value); if (!HIST.fontes.size) { HIST.fontes = new Set(["andamento", "publicacao", "evento", "anotacao"]); } carregarHistorico(); };
+["#h-de", "#h-ate"].forEach(i => $(i).onchange = () => carregarHistorico());
+let histT; $("#h-q").oninput = () => { clearTimeout(histT); histT = setTimeout(() => carregarHistorico(), 350); };
+$("#h-limpar").onclick = () => { ["#h-de", "#h-ate", "#h-q"].forEach(i => $(i).value = ""); HIST.fontes = new Set(["andamento", "publicacao", "evento", "anotacao"]); carregarHistorico(); };
+
 // abas
 document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x === b));
   document.querySelectorAll("main > section").forEach(s => s.classList.toggle("hide", s.id !== "t-" + b.dataset.t));
   if (b.dataset.t === "inicio") carregarDashboard();
   if (b.dataset.t === "calendario") carregarCalendario();
+  if (b.dataset.t === "historico") carregarHistorico();
   if (b.dataset.t === "config") carregarConfig();
   if (b.dataset.t === "equipe") carregarEquipe();
   if (b.dataset.t === "sobre") carregarSobre();
@@ -1011,7 +1120,7 @@ function renderLista() {
         <br><span class="mut">DJEN: ${DJE[p.dje_status] || "—"}${p.pub_total ? ` · ${p.pub_total} publ.${p.pub_ultima ? ", última em " + fmt(p.pub_ultima) : ""}` : ""}</span>${p.dje_status === "erro" && p.dje_mensagem ? `<br><span class="err" style="font-size:13px">${esc(p.dje_mensagem)}</span>` : ""}</td>
       <td><div class="acoes">
         <button class="b sm sec" data-ver="${p.id}">Movimentos</button>
-        ${p.ativo ? `<button class="b sm sec" data-ag="${p.id}">Agendar</button><button class="b sm sec" data-resp="${p.id}">Responsável</button><button class="b sm sec" data-upd="${p.id}">Atualizar</button><button class="b sm sec" data-mon="${p.id}" data-m="${p.monitorar ? 0 : 1}">${p.monitorar ? "Parar de monitorar" : "Monitorar"}</button><button class="b sm sec" data-arq="${p.id}" data-a="0">Arquivar</button>`
+        ${p.ativo ? `<button class="b sm sec" data-hist="${p.id}">Histórico</button><button class="b sm sec" data-ag="${p.id}">Agendar</button><button class="b sm sec" data-resp="${p.id}">Responsável</button><button class="b sm sec" data-upd="${p.id}">Atualizar</button><button class="b sm sec" data-mon="${p.id}" data-m="${p.monitorar ? 0 : 1}">${p.monitorar ? "Parar de monitorar" : "Monitorar"}</button><button class="b sm sec" data-arq="${p.id}" data-a="0">Arquivar</button>`
                   : `<button class="b sm sec" data-arq="${p.id}" data-a="1">Reativar</button>`}
         <button class="b sm dg" data-del="${p.id}">Remover</button></div></td></tr>`;
   }).join("");
@@ -1091,11 +1200,12 @@ $("#lista").onclick = async (e) => {
       if (b.dataset.m === "1") await pedirMonitorar([Number(b.dataset.mon)]);
       else { await api("/api/processos/monitorar", "POST", { ids: [Number(b.dataset.mon)], monitorar: false }); aviso("Processo fora do monitoramento diário."); carregarLista(); }
     }
+    if (b.dataset.hist) await abrirHistorico(Number(b.dataset.hist));
     if (b.dataset.ag) { irPara("calendario"); await abrirEvento(null, { data: hojeIso(), processo_id: Number(b.dataset.ag) }); }
     if (b.dataset.resp) await pedirResponsavel([Number(b.dataset.resp)]);
     if (b.dataset.upd) { await api(`/api/processos/${b.dataset.upd}/consultar`, "POST", {}); aviso("Processo colocado na fila de consulta."); status(); }
     if (b.dataset.arq) { await api("/api/processos/ativo", "POST", { ids: [Number(b.dataset.arq)], ativo: b.dataset.a === "1" }); carregarLista(); }
-    if (b.dataset.del && await confirmar("Remover este processo e TUDO o que está ligado a ele: andamentos, publicações e eventos da agenda (prazos, audiências). Esta ação não pode ser desfeita. Para apenas tirá-lo da lista, use Arquivar.", { titulo: "Remover processo", ok: "Remover", perigo: true })) { await api(`/api/processos/${b.dataset.del}`, "DELETE"); carregarLista(); }
+    if (b.dataset.del && await confirmar("Remover este processo e TUDO o que está ligado a ele: andamentos, publicações, anotações internas e eventos da agenda (prazos, audiências). Esta ação não pode ser desfeita. Para apenas tirá-lo da lista, use Arquivar.", { titulo: "Remover processo", ok: "Remover", perigo: true })) { await api(`/api/processos/${b.dataset.del}`, "DELETE"); carregarLista(); }
   } catch (err) { aviso(err.message); }
 };
 async function verMovimentos(id) {

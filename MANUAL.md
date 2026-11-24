@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.0)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.1)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -325,3 +325,13 @@ A aba "Calendário" reúne audiências, prazos, diligências e outros compromiss
 - Início: cartão "Prazos e compromissos" (vencidos, hoje, próximos 7 dias) e lista dos próximos; o selo na aba Calendário mostra vencidos/hoje.
 - Atenção: os lembretes ficam gravados, mas o ENVIO por e-mail só chega na v0.7.2. O programa só avisa com o computador ligado; para prazos fatais, use também o .ics no celular. As datas são sempre conferidas e informadas por você.
 - Remover um processo apaga também os eventos ligados a ele.
+
+29. HISTÓRICO DO PROCESSO (v0.7.1)
+A aba "Histórico" mostra, numa única linha do tempo (do mais novo para o mais antigo), tudo o que o programa guardou sobre um processo:
+andamentos do DataJud, publicações do DJEN, compromissos da agenda (audiências, prazos, diligências) e anotações internas da equipe.
+- Como abrir: escolha o processo no campo do alto (digite número, apelido ou cliente), ou use o botão "Histórico" na lista de Processos, ou clique em um andamento no Início.
+- Filtros: marcar/desmarcar as fontes, período (De/Até) e busca por texto. Publicações idênticas (mesma intimação enviada a várias partes) aparecem uma vez, com "×N".
+- Muitos itens: a tela carrega 40 por vez; "Carregar mais antigos" traz os seguintes.
+- Anotações internas: escreva no quadro "Nova anotação"; entram no histórico com a data e hora de hoje e o nome de quem escreveu. Quem escreveu (ou o administrador) pode editar e excluir; se duas pessoas editarem ao mesmo tempo, o programa avisa em vez de sobrescrever.
+- "Agendar prazo" em uma publicação abre o novo compromisso já ligado ao processo, com o trecho da publicação no teor. A DATA não é calculada nesta versão: você a informa (o cálculo automático como sugestão chega na v0.7.2).
+- A tela não consulta o CNJ: mostra só o que já foi guardado. Remover o processo apaga também as anotações e os eventos dele.

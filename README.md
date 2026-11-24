@@ -7,6 +7,7 @@ Programa local (Windows/Linux/macOS, Python 3.9+, apenas biblioteca padrão) que
 - **Filtros de pesquisa no DJEN**: OAB, CPF/CNPJ ou trecho de texto, para detectar publicações novas em processos ainda não cadastrados.
 - Painel em `http://127.0.0.1:8765`, alertas por e-mail opcionais, dados somente na máquina/servidor do escritório.
 - **Página inicial (v0.6.3)**: aba "Início" com cartões, gráfico dos últimos 14 dias, publicações por situação, tribunais, equipe e listas do que é novo (MANUAL, seção 27).
+- **Histórico do processo (v0.7.1)**: aba "Histórico" com linha do tempo única (andamentos, publicações, agenda e anotações), filtros e paginação (MANUAL, seção 29).
 - **Agenda e Calendário (v0.7.0)**: aba "Calendário" com visões Mês/Lista, eventos editáveis, tipos configuráveis, filtros, exportação .ics e cartão no Início (MANUAL, seção 28).
 - **Instalador com atalho (v0.6.1)**: `Instalar-MonitorProcessos-vX.Y.Z.exe` instala em `%LOCALAPPDATA%\MonitorProcessos` com ícone e atalho; as atualizações trocam só a pasta `app` e nunca tocam nos dados nem no atalho (MANUAL, seção 25; código em `instalador/`).
 - **Publicações para a equipe (v0.6)**: situação compartilhada (nova, em análise, tratada) com quem e quando; responsável por processo (com e-mail); cópias idênticas agrupadas (×N); botão "Calcular prazo" em dias úteis, com memória de cálculo (ferramenta de apoio).
