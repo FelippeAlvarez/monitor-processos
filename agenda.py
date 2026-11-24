@@ -5,7 +5,8 @@
   cancelados e excluídos. Toda mudança fica no log do evento (quem, quando, o quê).
 - Edição simultânea: cada evento tem uma 'versao'; quem salva com versão desatualizada recebe um aviso em vez de sobrescrever.
 - Datas e horas são locais, sem fuso (um prazo é uma data, não um instante).
-- Os lembretes (dias antes) são escolhidos a cada agendamento e guardados no evento; o envio por e-mail é da v0.7.2.
+- Os lembretes (dias antes) são escolhidos a cada agendamento e guardados no evento; o envio por e-mail está em lembretes.py (v0.7.2).
+- v0.7.2: o evento pode guardar a memória de cálculo do prazo (campo `calculo`): a data calculada é só sugestão; vale a data gravada no evento.
 """
 import datetime as dt
 import json
@@ -77,8 +78,29 @@ def agora():
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+SCHEMA_LEMB = """
+CREATE TABLE IF NOT EXISTS lembretes_enviados(
+  evento_id INTEGER NOT NULL REFERENCES eventos(id) ON DELETE CASCADE,
+  dias_antes INTEGER NOT NULL,
+  data_ref TEXT NOT NULL,
+  destinatario TEXT NOT NULL,
+  enviado_em TEXT NOT NULL,
+  PRIMARY KEY(evento_id, dias_antes, data_ref, destinatario)
+);
+CREATE TABLE IF NOT EXISTS agenda_resumos(
+  dia TEXT NOT NULL,
+  destinatario TEXT NOT NULL,
+  enviado_em TEXT NOT NULL,
+  PRIMARY KEY(dia, destinatario)
+);
+"""
+
+
 def migrar(b):
     b.conn.executescript(SCHEMA_AGENDA)
+    if "calculo" not in [r[1] for r in b.conn.execute("PRAGMA table_info(eventos)").fetchall()]:
+        b.conn.execute("ALTER TABLE eventos ADD COLUMN calculo TEXT NOT NULL DEFAULT ''")
+    b.conn.executescript(SCHEMA_LEMB)
     if not b.conn.execute("SELECT 1 FROM tipos_evento LIMIT 1").fetchone():
         for i, (nome, cor) in enumerate(TIPOS_PADRAO):
             b.conn.execute("INSERT INTO tipos_evento(nome,cor,ordem) VALUES(?,?,?)", (nome, cor, i))
@@ -232,7 +254,31 @@ def validar(b, c, auth=None, completo=True):
         if any(x not in LEMBRETES_OK for x in ls):
             raise ErroAgenda("Lembrete com antecedência não permitida.")
         r["lembretes"] = json.dumps(ls)
+    if completo or "calculo" in c:
+        r["calculo"] = _calculo(c.get("calculo"))
     return r
+
+
+def _calculo(x):
+    """Memória de cálculo do prazo (sugestão): só os campos conhecidos, com tamanho limitado. Vazio = sem cálculo."""
+    if not x:
+        return ""
+    if not isinstance(x, dict):
+        raise ErroAgenda("Memória de cálculo inválida.")
+    out = {}
+    for k in ("disponibilizacao", "publicacao", "inicio", "vencimento"):
+        if x.get(k):
+            out[k] = _data(x[k])
+    try:
+        out["dias"] = int(x.get("dias"))
+    except (TypeError, ValueError):
+        raise ErroAgenda("Memória de cálculo inválida (dias).")
+    memo = x.get("memoria") or []
+    if not isinstance(memo, list) or len(memo) > 20:
+        raise ErroAgenda("Memória de cálculo inválida.")
+    out["memoria"] = [str(m)[:600] for m in memo]
+    out["aviso"] = str(x.get("aviso") or "")[:400]
+    return json.dumps(out, ensure_ascii=False)
 
 
 def _log(b, eid, por, acao, detalhe=""):
@@ -246,17 +292,17 @@ def criar(b, c, por, auth=None, origem=""):
             raise ErroAgenda("Este tipo de evento está desativado.")
         cur = b.conn.execute(
             "INSERT INTO eventos(processo_id,tipo_id,titulo,descricao,data,hora,local,responsavel_id,lembretes,origem,"
-            "criado_por,criado_em,atualizado_por,atualizado_em) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "criado_por,criado_em,atualizado_por,atualizado_em,calculo) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (v["processo_id"], v["tipo_id"], v["titulo"], v["descricao"], v["data"], v["hora"], v["local"], v["responsavel_id"],
-             v["lembretes"], origem, por, agora(), por, agora()))
+             v["lembretes"], origem or ("prazo_calculado" if v["calculo"] else ""), por, agora(), por, agora(), v["calculo"]))
         eid = cur.lastrowid
-        _log(b, eid, por, "criado", f"{v['titulo']} — {v['data']}")
+        _log(b, eid, por, "criado", f"{v['titulo']} — {v['data']}" + (" (prazo calculado pelo programa; data confirmada pelo usuário)" if v["calculo"] else ""))
         b.conn.commit()
         return eid
 
 
 _ROT = {"titulo": "título", "descricao": "teor", "data": "data", "hora": "hora", "local": "local", "tipo_id": "tipo",
-        "processo_id": "processo", "responsavel_id": "responsável", "lembretes": "lembretes"}
+        "processo_id": "processo", "responsavel_id": "responsável", "lembretes": "lembretes", "calculo": "cálculo"}
 
 
 def editar(b, eid, c, por, auth=None):
@@ -289,6 +335,8 @@ def editar(b, eid, c, por, auth=None):
             elif k == "tipo_id":
                 nome = lambda i: (b.conn.execute("SELECT nome FROM tipos_evento WHERE id=?", (i,)).fetchone() or ["?"])[0]  # noqa: E731
                 det.append(f"tipo: {nome(antigo['tipo_id'])} → {nome(novo)}")
+            elif k == "calculo":
+                det.append("memória de cálculo atualizada")
             elif k in ("responsavel_id", "processo_id"):
                 det.append(f"{_ROT[k]} alterado")
             else:
@@ -338,6 +386,10 @@ def _enriquecer(linhas, hoje):
             e["lembretes"] = json.loads(e["lembretes"] or "[]")
         except ValueError:
             e["lembretes"] = []
+        try:
+            e["calculo"] = json.loads(e["calculo"]) if e.get("calculo") else None
+        except ValueError:
+            e["calculo"] = None
     return linhas
 
 
@@ -468,6 +520,14 @@ def ics(eventos, agora_utc=None):
         if e.get("local"):
             L.append("LOCATION:" + _esc(e["local"]))
         L.append("STATUS:" + ("CANCELLED" if e["situacao"] == "cancelado" else "CONFIRMED"))
+        if e["situacao"] == "aberto":
+            for n in sorted(e.get("lembretes") or [], reverse=True):
+                # redundância dos lembretes: alarme do próprio calendário (às 9h do dia, se o evento não tem hora)
+                if e.get("hora"):
+                    gatilho = f"-P{n}D" if n else "-PT30M"
+                else:
+                    gatilho = f"-PT{n * 24 - 9}H" if n else "PT9H"
+                L += ["BEGIN:VALARM", "ACTION:DISPLAY", "DESCRIPTION:" + _esc("Lembrete: " + e["titulo"]), "TRIGGER:" + gatilho, "END:VALARM"]
         L.append("END:VEVENT")
     L.append("END:VCALENDAR")
     return ("\r\n".join(_dobrar(x) for x in L) + "\r\n").encode("utf-8")

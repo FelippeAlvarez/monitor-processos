@@ -26,6 +26,7 @@ from urllib.parse import parse_qs, urlparse
 import auth
 import agenda
 import historico
+import lembretes
 import prazos
 import backup
 import datajud
@@ -218,6 +219,13 @@ def r_eventos_ics(h):
 def r_evento_get(h, eid):
     e = agenda.obter(CTX.banco, int(eid))
     h.json(e) if e else h.json({"erro": "Evento não encontrado."}, 404)
+
+
+def r_agenda_enviar(h):
+    """Administrador: envia agora o resumo da agenda (teste do e-mail e dos lembretes devidos)."""
+    r = lembretes.enviar_resumos(CTX.banco, CTX.config.dados, forcar=True)
+    h.auditar("agenda_resumo_manual", f"{r['enviados']} e-mail(s)")
+    h.json(r)
 
 
 def r_evento_add(h):
@@ -928,6 +936,7 @@ ROTAS = [
     ("POST", r"/api/eventos/(\d+)/situacao", r_evento_situacao, "usu"),
     ("DELETE", r"/api/eventos/(\d+)", r_evento_del, "usu"),
     ("GET", r"/api/calendario/dias", r_calendario_dias, "usu"),
+    ("POST", r"/api/agenda/enviar-resumo", r_agenda_enviar, "adm"),
     ("GET", r"/api/processos/(\d+)/historico", r_historico, "usu"),
     ("POST", r"/api/processos/(\d+)/anotacoes", r_anotacao_add, "usu"),
     ("POST", r"/api/anotacoes/(\d+)", r_anotacao_edit, "usu"),
@@ -1104,6 +1113,10 @@ def agendador():
             verificar_backup()
         except Exception as e:  # noqa: BLE001
             logging.getLogger("monitor").exception("Falha no backup automático: %r", e)
+        try:
+            lembretes.enviar_resumos(CTX.banco, CTX.config.dados)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("monitor").exception("Falha no resumo da agenda: %r", e)
         if CTX.trava:
             CTX.trava.batimento()
         voltas += 1

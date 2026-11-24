@@ -235,9 +235,11 @@
   </div>
   <label for="ev-local" style="margin-top:8px">Local ou link (opcional)</label><input id="ev-local" maxlength="200" style="width:100%">
   <label for="ev-desc" style="margin-top:8px">Teor / descrição (explicação da tarefa)</label><textarea id="ev-desc" rows="4" style="width:100%" maxlength="4000"></textarea>
+  <div id="ev-calc" class="card hide" style="margin-top:10px;padding:8px 10px"></div>
+  <input type="hidden" id="ev-calculo">
   <label style="margin-top:8px">Lembretes (dias antes da data)</label>
   <div class="lemb" id="ev-lemb"></div>
-  <p class="mut" id="ev-aviso-lemb" style="margin:4px 0 0">Os lembretes ficam gravados no evento; o envio por e-mail começa na v0.7.2 (o programa precisa estar aberto no dia).</p>
+  <p class="mut" id="ev-aviso-lemb" style="margin:4px 0 0">Os lembretes saem no resumo diário por e-mail (configurado em Configurações) e como alarme no arquivo .ics. O e-mail só é enviado com o computador ligado e o Monitor aberto.</p>
   <p class="mut hide" id="ev-situacao" style="margin:8px 0 0"></p>
   <details id="ev-logbox" class="hide" style="margin-top:8px"><summary class="mut">Histórico do evento</summary><div id="ev-log" class="mut" style="font-size:12.5px"></div></details>
   <div class="acoes" style="margin-top:14px">
@@ -268,7 +270,7 @@
     <div><label for="dz-data">Data de disponibilização no DJEN</label><input id="dz-data" type="date"></div>
     <div><label for="dz-dias">Prazo, em dias úteis</label><input id="dz-dias" type="number" min="1" max="400" inputmode="numeric" placeholder="ex.: 15"></div>
   </div>
-  <div class="acoes" style="margin-top:10px"><button class="b" type="button" id="dz-calc">Calcular</button><button class="b sec" type="button" id="dz-x">Fechar</button></div>
+  <div class="acoes" style="margin-top:10px"><button class="b" type="button" id="dz-calc">Calcular</button><button class="b sec" type="button" id="dz-ag" disabled>Agendar este prazo</button><button class="b sec" type="button" id="dz-x">Fechar</button></div>
   <div id="dz-res" class="hide" style="margin-top:12px"></div>
 </form></dialog>
 <header><div class="marca"><img class="lg" alt="ASA — Alvarez de Sá Advocacia"><span class="sep"></span><h1>Monitor de Processos <span class="mut" id="ver"></span></h1></div>
@@ -359,7 +361,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   </div>
   <datalist id="dl-proc"></datalist>
   <div id="cal-corpo"></div>
-  <p class="mut" style="font-size:12.5px">Em vermelho: compromissos em aberto com data vencida. Fundo amarelo: feriado; cinza: recesso forense (CPC, art. 220) — conforme o calendário de Configurações. As datas dos eventos são informadas por você (a data calculada de um prazo é só sugestão e deve ser conferida). Os lembretes escolhidos em cada evento serão enviados por e-mail a partir da v0.7.2; até lá, use o botão Exportar .ics.</p>
+  <p class="mut" style="font-size:12.5px">Em vermelho: compromissos em aberto com data vencida. Fundo amarelo: feriado; cinza: recesso forense (CPC, art. 220) — conforme o calendário de Configurações. As datas dos eventos são informadas por você (a data calculada de um prazo é só sugestão e deve ser conferida). Os lembretes escolhidos em cada evento saem no resumo diário por e-mail (só com o computador ligado e o Monitor aberto); para prazo fatal, use também o Exportar .ics no celular.</p>
 </section>
 <section id="t-painel" class="hide">
   <div class="cards">
@@ -577,6 +579,16 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     </div>
     <p class="mut">Gmail: use uma “senha de app” criada só para esta finalidade, nunca a senha da conta. A senha fica gravada em texto simples no arquivo <code>config.json</code> da pasta de dados do servidor (não vai para o backup nem para o GitHub).</p>
     <div class="acoes"><button class="b" id="b-cfg">Salvar</button><button class="b sec" id="b-teste">Enviar e-mail de teste (salve antes)</button></div>
+  </div>
+  <div class="card" id="ag-cfg">
+    <b>Resumo diário da agenda por e-mail</b>
+    <p class="mut">Usa o servidor de e-mail acima (e a chave “Enviar alerta por e-mail” precisa estar ligada). Cada responsável recebe os eventos dele; os destinatários gerais recebem tudo (ou só os eventos sem responsável, se você desmarcar a opção). Lembretes seguem o que foi escolhido em cada evento; vencidos em aberto são lembrados todo dia. O envio só acontece com o computador ligado e o Monitor aberto; se estava desligado, o aviso sai ao ligar.</p>
+    <label><input type="checkbox" id="ag-ativo" style="width:auto"> Enviar o resumo da agenda</label>
+    <div class="grid2">
+      <div><label for="ag-hora">A partir de que horas (HH:MM)</label><input id="ag-hora" type="time"></div>
+      <div><label style="margin-top:22px"><input type="checkbox" id="ag-geral" style="width:auto"> Destinatários gerais recebem tudo</label></div>
+    </div>
+    <div class="acoes"><button class="b" id="ag-salvar" type="button">Salvar</button><button class="b sec" id="ag-agora" type="button">Enviar o resumo agora (teste)</button></div>
   </div>
   <div class="card" id="diag-card">
     <b>Diagnóstico do DJEN (administrador)</b>
@@ -875,7 +887,15 @@ $("#cal-ics").onclick = () => {
 };
 
 // diálogo de evento
-const dEv = $("#d-evento");
+const dEv = $("#d-evento"); let EV_CALC = null;
+function desenharCalculo() {
+  const box = $("#ev-calc"); box.classList.toggle("hide", !EV_CALC); if (!EV_CALC) return;
+  const dif = $("#ev-data").value && EV_CALC.vencimento && $("#ev-data").value !== EV_CALC.vencimento;
+  box.innerHTML = `<b>Prazo calculado pelo programa:</b> ${EV_CALC.dias} dias úteis → <b>${dataBr(EV_CALC.vencimento)}</b> <span class="mut">(sugestão: confira nos autos antes de confiar)</span>
+    ${dif ? `<div class="warn">A data deste evento (${dataBr($("#ev-data").value)}) é diferente da calculada — vale a data do evento.</div>` : ""}
+    <details style="margin-top:4px"><summary class="mut">Memória de cálculo</summary><ol style="margin:6px 0 0 18px;padding:0;font-size:13px">${(EV_CALC.memoria || []).map(m => `<li>${esc(m)}</li>`).join("")}</ol><div class="mut" style="font-size:12px">${esc(EV_CALC.aviso || "")}</div></details>`;
+}
+$("#ev-data").addEventListener("input", desenharCalculo);
 function lembMarcados() { return [...document.querySelectorAll("#ev-lemb input:checked")].map(x => Number(x.value)); }
 function tiposParaEscolha(atualId) { return CAL.tipos.filter(t => t.ativo || t.id === atualId); }
 async function abrirEvento(id, pre = {}) {
@@ -896,6 +916,7 @@ async function abrirEvento(id, pre = {}) {
   const lem = e ? e.lembretes : (pre.lembretes || [1, 0]);
   document.querySelectorAll("#ev-lemb input").forEach(c => c.checked = lem.includes(Number(c.value)));
   $("#ev-proc").dataset.tocado = ""; $("#ev-resp").dataset.tocado = e ? "1" : "";
+  const calc = e ? e.calculo : (pre.calculo || null); $("#ev-calculo").value = !e && calc ? JSON.stringify(calc) : ""; EV_CALC = calc; desenharCalculo();
   const sit = $("#ev-situacao"); sit.classList.toggle("hide", !e || e.situacao === "aberto");
   if (e && e.situacao !== "aberto") sit.innerHTML = `<b class="${e.situacao === "concluido" ? "ok" : "warn"}">${e.situacao === "concluido" ? "Concluído" : "Cancelado"}</b>${e.concluido_por ? " por " + esc(e.concluido_por) : ""}${e.concluido_em ? " em " + fmtUtc(e.concluido_em) : ""}${e.conclusao_obs ? " — " + esc(e.conclusao_obs) : ""}. Reabra para editar.`;
   document.querySelectorAll("#d-evento input:not([type=hidden]), #d-evento select, #d-evento textarea").forEach(x => x.disabled = ro);
@@ -916,6 +937,7 @@ $("#ev-salvar").onclick = async () => {
   if (txt && !pr) { aviso("Processo não encontrado na lista: escolha uma das opções sugeridas ou deixe o campo vazio."); return; }
   const corpo = { titulo: $("#ev-titulo").value, tipo_id: Number($("#ev-tipo").value), data: $("#ev-data").value, hora: $("#ev-hora").value, local: $("#ev-local").value,
     descricao: $("#ev-desc").value, processo_id: pr ? pr.id : null, responsavel_id: $("#ev-resp").value ? Number($("#ev-resp").value) : null, lembretes: lembMarcados() };
+  if (!$("#ev-id").value && $("#ev-calculo").value) corpo.calculo = JSON.parse($("#ev-calculo").value);
   const id = $("#ev-id").value;
   try {
     if (id) { corpo.versao = Number($("#ev-versao").value); await api("/api/eventos/" + id, "POST", corpo); await aposEvento("Evento atualizado."); }
@@ -1031,8 +1053,7 @@ $("#h-lista").onclick = async (e) => {
   const b = e.target.closest("button"); if (!b) return; const it = HIST.itens.find(x => x.fonte + ":" + x.id === b.closest("[data-k]").dataset.k);
   if (b.dataset.exp !== undefined) { const t = b.closest(".it").querySelector("[data-tx]"); t.classList.toggle("cur"); b.textContent = t.classList.contains("cur") ? "Ler tudo" : "Recolher"; return; }
   if (b.dataset.hev) { irPara("calendario"); abrirEvento(Number(b.dataset.hev)); return; }
-  if (b.dataset.hag) { const tipo = CAL.tipos.find(t => /prazo fatal/i.test(t.nome)); await prepararAgenda(); const tp = CAL.tipos.find(t => /prazo fatal/i.test(t.nome) && t.ativo) || tipo;
-    irPara("calendario"); abrirEvento(null, { processo_id: HIST.pid, tipo_id: tp ? tp.id : undefined, titulo: "Prazo — " + (it.titulo || "publicação").slice(0, 80), descricao: `Publicação de ${dataBr(it.quando.slice(0, 10))} (${it.titulo}):\n` + (it.texto || "").slice(0, 600), lembretes: [3, 1, 0] }); return; }
+  if (b.dataset.hag) { const p = HIST.cab.processo; abrirCalculo({ processo_id: HIST.pid, numero: p.numero, apelido: p.apelido || p.cliente, data_disp: it.quando.slice(0, 10), titulo: it.titulo, texto: it.texto }); return; }
   if (b.dataset.hane) {
     const novo = await perguntar("Editar anotação:", it.texto, { titulo: "Editar anotação", ok: "Salvar" }); if (novo === null) return;
     try { await api("/api/anotacoes/" + it.id, "POST", { texto: novo, versao: it.versao }); aviso("Anotação atualizada."); carregarHistorico(); } catch (er) { aviso(er.message); } return; }
@@ -1305,7 +1326,22 @@ $("#p-lista").onclick = (e) => {
   $("#dz-proc").textContent = `${b.numero}${b.apelido ? " · " + b.apelido : ""} — publicação disponibilizada em ${fmt(b.data_disp)}`;
   $("#dz-data").value = (b.data_disp || "").slice(0, 10); $("#dz-dias").value = "";
   $("#dz-res").classList.add("hide"); $("#dz-res").innerHTML = "";
+  abrirCalculo({ processo_id: b.processo_id, numero: b.numero, apelido: b.apelido, data_disp: (b.data_disp || "").slice(0, 10), titulo: b.tipo_com || "Publicação", texto: b.texto || "" });
+};
+let PRAZO_CTX = null, PRAZO_ULT = null;
+function abrirCalculo(ctx) {
+  PRAZO_CTX = ctx; PRAZO_ULT = null; $("#dz-ag").disabled = true;
+  $("#dz-proc").textContent = `${ctx.numero}${ctx.apelido ? " · " + ctx.apelido : ""} — publicação disponibilizada em ${dataBr(ctx.data_disp)}`;
+  $("#dz-data").value = ctx.data_disp; $("#dz-dias").value = "";
+  $("#dz-res").classList.add("hide"); $("#dz-res").innerHTML = "";
   dPrazo.showModal(); $("#dz-dias").focus();
+}
+$("#dz-ag").onclick = async () => {
+  if (!PRAZO_ULT || !PRAZO_CTX) return;
+  await prepararAgenda(); const tp = CAL.tipos.find(t => /prazo fatal/i.test(t.nome) && t.ativo) || CAL.tipos.find(t => t.ativo);
+  const r = PRAZO_ULT, c = PRAZO_CTX; dPrazo.close(); irPara("calendario");
+  abrirEvento(null, { processo_id: c.processo_id, tipo_id: tp ? tp.id : undefined, data: r.vencimento, titulo: "Prazo — " + (c.titulo || "publicação").slice(0, 80),
+    descricao: `Prazo de ${r.dias} dias úteis a partir da publicação disponibilizada em ${dataBr(r.disponibilizacao)} (${c.titulo}):\n` + (c.texto || "").replace(/^Processo:\s*\S+\s*Conteudo:\s*/i, "").slice(0, 500), lembretes: [3, 1, 0], calculo: r });
 };
 $("#dz-x").onclick = () => dPrazo.close();
 ["#dz-dias", "#dz-data"].forEach(i => $(i).onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); $("#dz-calc").click(); } });
@@ -1315,7 +1351,7 @@ $("#dz-calc").onclick = async () => {
     const dsem = (iso) => { const [a, m, d] = iso.split("-").map(Number); return ["domingo","segunda-feira","terça-feira","quarta-feira","quinta-feira","sexta-feira","sábado"][new Date(a, m - 1, d).getDay()]; };
     $("#dz-res").innerHTML = `<div class="card dest d-ok"><span class="mut">Vencimento (${r.dias} dias úteis)</span><b style="font-size:20px;display:block">${fmt(r.vencimento)} (${dsem(r.vencimento)})</b></div>
       <details open><summary><b>Memória de cálculo</b></summary><ol style="margin:6px 0 0 18px;padding:0">${r.memoria.map(m => `<li style="margin:4px 0">${esc(m)}</li>`).join("")}</ol></details>`;
-    $("#dz-res").classList.remove("hide");
+    $("#dz-res").classList.remove("hide"); PRAZO_ULT = r; $("#dz-ag").disabled = !PRAZO_CTX || !PRAZO_CTX.processo_id;
     $("#dz-aviso").textContent = r.aviso;
   } catch (err) { $("#dz-res").innerHTML = `<span class="err">${esc(err.message)}</span>`; $("#dz-res").classList.remove("hide"); }
 };
@@ -1483,6 +1519,8 @@ async function carregarConfig() {
   $("#m-auto").checked = c.monitoramento.auto_sem_oab; $("#m-dias").value = c.monitoramento.auto_dias;
   const pz = c.prazos || { feriados_extras: [], recesso: { ativo: true, inicio: "12-20", fim: "01-20" } };
   $("#z-extras").value = (pz.feriados_extras || []).join("\n"); $("#z-rec").checked = pz.recesso.ativo; $("#z-ini").value = pz.recesso.inicio; $("#z-fim").value = pz.recesso.fim;
+  const ag = c.agenda || { email_ativo: true, hora: "07:00", geral_recebe_tudo: true };
+  $("#ag-ativo").checked = ag.email_ativo; $("#ag-hora").value = ag.hora; $("#ag-geral").checked = ag.geral_recebe_tudo;
   const e = c.email;
   $("#e-ativo").checked = e.ativo; $("#e-host").value = e.smtp_host; $("#e-porta").value = e.smtp_porta;
   $("#e-user").value = e.usuario; $("#e-rem").value = e.remetente; $("#e-dest").value = e.destinatario;
@@ -1522,6 +1560,8 @@ $("#b-cfg").onclick = async () => {
     aviso("Configurações salvas."); carregarConfig();
   } catch (e) { aviso(e.message); }
 };
+$("#ag-salvar").onclick = async () => { try { await api("/api/config", "POST", { agenda: { email_ativo: $("#ag-ativo").checked, hora: $("#ag-hora").value, geral_recebe_tudo: $("#ag-geral").checked } }); aviso("Resumo da agenda salvo."); carregarConfig(); } catch (e) { aviso(e.message); } };
+$("#ag-agora").onclick = async () => { try { const r = await api("/api/agenda/enviar-resumo", "POST", {}); aviso(r.enviados ? `${r.enviados} e-mail(s) enviado(s).` : (r.erros ? "Falha no envio: veja o log." : "Nada a enviar agora (" + r.motivo + ").")); } catch (e) { aviso(e.message); } };
 $("#b-teste").onclick = async () => { try { await api("/api/email/teste", "POST", {}); aviso("E-mail de teste enviado."); } catch (e) { aviso(e.message); } };
 
 // sobre

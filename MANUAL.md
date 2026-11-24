@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.1)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.2)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -323,7 +323,7 @@ A aba "Calendário" reúne audiências, prazos, diligências e outros compromiss
 - Tipos de evento: o administrador cria, renomeia, muda a cor, desativa ou exclui tipos (exclusão só se nenhum evento usa o tipo) em "Tipos de evento".
 - Exportar .ics: baixa os eventos filtrados para abrir no Outlook, Google Agenda ou celular.
 - Início: cartão "Prazos e compromissos" (vencidos, hoje, próximos 7 dias) e lista dos próximos; o selo na aba Calendário mostra vencidos/hoje.
-- Atenção: os lembretes ficam gravados, mas o ENVIO por e-mail só chega na v0.7.2. O programa só avisa com o computador ligado; para prazos fatais, use também o .ics no celular. As datas são sempre conferidas e informadas por você.
+- Lembretes: ver a seção 30 (resumo diário por e-mail). As datas são sempre conferidas e informadas por você.
 - Remover um processo apaga também os eventos ligados a ele.
 
 29. HISTÓRICO DO PROCESSO (v0.7.1)
@@ -335,3 +335,16 @@ andamentos do DataJud, publicações do DJEN, compromissos da agenda (audiência
 - Anotações internas: escreva no quadro "Nova anotação"; entram no histórico com a data e hora de hoje e o nome de quem escreveu. Quem escreveu (ou o administrador) pode editar e excluir; se duas pessoas editarem ao mesmo tempo, o programa avisa em vez de sobrescrever.
 - "Agendar prazo" em uma publicação abre o novo compromisso já ligado ao processo, com o trecho da publicação no teor. A DATA não é calculada nesta versão: você a informa (o cálculo automático como sugestão chega na v0.7.2).
 - A tela não consulta o CNJ: mostra só o que já foi guardado. Remover o processo apaga também as anotações e os eventos dele.
+
+30. PRAZOS E LEMBRETES (v0.7.2)
+Agendar um prazo a partir de uma publicação
+- Em Publicações, "Calcular prazo" (ou, no Histórico, "Agendar prazo" na publicação): informe os dias úteis e clique em Calcular. Aparecem o vencimento e a memória de cálculo (CPC arts. 219, 220 e 224; Lei 11.419/2006, art. 4º; feriados e recesso das Configurações).
+- "Agendar este prazo" abre o novo evento (tipo Prazo fatal) já ligado ao processo, com a data calculada como SUGESTÃO. Você confere, pode mudar a data, o teor, o responsável e os lembretes, e só então salva. Vale sempre a data gravada no evento; se ela diferir da calculada, o programa avisa na própria tela.
+- A memória de cálculo fica guardada no evento (e o histórico do evento registra que a data veio de cálculo). Se uma regra mudar depois (novo feriado, por exemplo), o evento NÃO é recalculado sozinho: confira os prazos importantes.
+Resumo diário da agenda por e-mail
+- Configurações > "Resumo diário da agenda por e-mail": ligar/desligar, horário a partir do qual envia (padrão 07:00) e se os destinatários gerais recebem tudo. Usa o servidor de e-mail já configurado (e a chave "Enviar alerta por e-mail" precisa estar ligada).
+- Cada responsável recebe os eventos dele; os destinatários gerais recebem tudo (ou só os eventos sem responsável). Ninguém recebe o mesmo aviso duas vezes.
+- O e-mail traz: VENCIDOS (em aberto com data passada; repetido todo dia até concluir ou cancelar), HOJE e PRÓXIMOS (conforme os lembretes escolhidos em cada evento). Mudar a data de um evento reabilita os lembretes dele.
+- Computador desligado: o programa só envia com o computador ligado e o Monitor aberto. Ao ligar, o aviso atrasado sai de uma vez, num único e-mail. Por isso, para prazo fatal, use também o "Exportar .ics" (os alarmes dos lembretes vão junto no arquivo) e, quando o programa estiver na VPS, o envio passa a ser contínuo.
+- Se o envio falhar (sem internet, senha errada), o programa tenta de novo depois de 30 minutos; o botão "Enviar o resumo agora (teste)" tenta imediatamente. Falhas ficam no log.
+- Ferramenta de apoio: não substitui a conferência nos autos, nos portais dos tribunais e na intimação oficial.

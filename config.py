@@ -26,6 +26,8 @@ PADRAO = {
     "backup_ativo": True,
     "backup_hora": "02:00",
     "backup_manter": 30,
+    # v0.7.2: resumo diário da agenda por e-mail (usa o servidor SMTP da seção "email")
+    "agenda": {"email_ativo": True, "hora": "07:00", "geral_recebe_tudo": True},
     "email": {
         "ativo": False,
         "smtp_host": "smtp.gmail.com",
@@ -164,6 +166,18 @@ class Config:
                 if not 1 <= n <= 365:
                     raise ValueError("Quantidade de backups guardados deve ficar entre 1 e 365.")
                 d["backup_manter"] = n
+            ag = novo.get("agenda")
+            if isinstance(ag, dict):
+                na = dict(d.get("agenda") or {})
+                for campo in ("email_ativo", "geral_recebe_tudo"):
+                    if campo in ag:
+                        na[campo] = bool(ag[campo])
+                if "hora" in ag:
+                    hora = str(ag["hora"]).strip()
+                    if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", hora):
+                        raise ValueError("Hora do resumo da agenda inválida (use HH:MM, ex.: 07:00).")
+                    na["hora"] = hora
+                d["agenda"] = na
             em = novo.get("email")
             if isinstance(em, dict):
                 for campo in ("smtp_host", "usuario", "remetente", "destinatario"):
