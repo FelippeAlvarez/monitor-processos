@@ -126,6 +126,18 @@ def r_status(h):
             "ultima_consulta": CTX.banco.ultima_consulta_geral(), "intervalo_horas": intervalo})
 
 
+def r_dashboard(h):
+    """v0.6.3: números da página inicial (um só pedido)."""
+    d = CTX.banco.dashboard()
+    d["filtros_novas"] = sum(o["pub_novas"] for o in CTX.banco.oabs())
+    d["filtros_ativos"] = len(CTX.banco.oabs_ativas())
+    d["varredura"] = CTX.monitor.resumo_varredura()
+    d["dje_ativo"] = CTX.config.dados.get("dje_ativo", True)
+    d["rodando"] = CTX.monitor.rodando
+    d["progresso"] = CTX.monitor.progresso
+    h.json(d)
+
+
 def r_publicacoes(h):
     q = parse_qs(urlparse(h.path).query)
     pid = int(q["processo"][0]) if q.get("processo") else None
@@ -696,6 +708,7 @@ ROTAS = [
     ("POST", r"/api/processos/(\d+)/visto", r_visto, "usu"),
     ("POST", r"/api/processos/(\d+)/consultar", r_consultar_um, "usu"),
     ("POST", r"/api/visto-todos", r_visto_todos, "usu"),
+    ("GET", r"/api/dashboard", r_dashboard, "usu"),
     ("POST", r"/api/consultar", r_consultar_todos, "usu"),
     ("POST", r"/api/consultar-dje", r_consultar_dje, "usu"),
     ("GET", r"/api/log", r_log, "adm"),

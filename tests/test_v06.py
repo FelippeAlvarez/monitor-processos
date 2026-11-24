@@ -394,3 +394,47 @@ class TesteDjeIndependente(unittest.TestCase):
         r = m.resumo_varredura()
         self.assertEqual(r["dje_feitos_hoje"], 0)
         self.assertEqual(r["dje_restantes"], 1)
+
+
+class TesteInicio(Base):
+    """v0.6.3: números da página inicial."""
+
+    def test_dashboard(self):
+        adm = self.admin()
+        b = app.CTX.banco
+        p1 = b.adicionar(NUM, LIMPO, "trt1", apelido="Reclamação X")
+        p2 = b.adicionar("0000001-00.2024.8.19.0001", "00000010020248190001", "tjrj", monitorar=False)
+        b.conn.execute("UPDATE processos SET baseline_feito=1 WHERE id=?", (p1,))
+        hoje = dt.date.today()
+        b.conn.execute("INSERT INTO movimentos(processo_id,chave,nome,data_hora,visto,detectado_em) VALUES(?,?,?,?,0,?)",
+                       (p1, "k1", "Juntada", hoje.isoformat() + "T10:00:00", "2026-11-20T00:00:00Z"))
+        b.conn.execute("INSERT INTO movimentos(processo_id,chave,nome,data_hora,visto,detectado_em) VALUES(?,?,?,?,1,?)",
+                       (p1, "k2", "Conclusos", hoje.isoformat() + "T11:00:00", "2026-11-20T00:00:00Z"))
+        b.conn.commit()
+        b.registrar_publicacoes(p1, [api(1, texto("A", n=1), data=hoje.isoformat()), api(2, texto("B", n=2), data=hoje.isoformat())])
+        b.conn.execute("UPDATE publicacoes SET situacao='nova', visto=0")
+        b.conn.commit()
+        app.CTX.config.dados["dje_ativo"] = True
+        st, d, _ = adm.req("GET", "/api/dashboard")
+        self.assertEqual(st, 200)
+        self.assertEqual((d["processos"]["ativos"], d["processos"]["monitorados"], d["processos"]["nao_monitorados"]), (2, 1, 1))
+        self.assertEqual(d["movimentos"], {"novos": 1, "processos": 1})
+        self.assertEqual(d["publicacoes"]["situacao"]["nova"], 1)          # 2 cópias = 1 publicação
+        self.assertEqual(len(d["serie"]), 14)
+        self.assertEqual(d["serie"][-1]["movimentos"], 2)
+        self.assertEqual(d["serie"][-1]["publicacoes"], 1)
+        self.assertEqual(d["ultimas_publicacoes"][0]["copias"], 2)
+        self.assertNotIn("Intimado(s)", d["ultimas_publicacoes"][0]["trecho"])
+        self.assertFalse(d["ultimas_publicacoes"][0]["trecho"].startswith("Processo:"))
+        self.assertIn("varredura", d)
+        self.assertEqual({t["alias"] for t in d["tribunais"]}, {"trt1", "tjrj"})
+        self.assertEqual(self.novo().req("GET", "/api/dashboard")[0], 401)
+
+    def test_dashboard_vazio_e_pagina(self):
+        adm = self.admin()
+        st, d, _ = adm.req("GET", "/api/dashboard")
+        self.assertEqual(st, 200)
+        self.assertEqual((d["processos"]["total"], d["movimentos"]["novos"], d["publicacoes"]["novas"]), (0, 0, 0))
+        html = (HERE.parent / "static" / "index.html").read_text(encoding="utf-8")
+        for k in ('data-t="inicio"', 'id="t-inicio"', "carregarDashboard", 'id="t-painel" class="hide"'):
+            self.assertIn(k, html)

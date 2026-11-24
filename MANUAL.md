@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.6.2)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.6.3)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -288,10 +288,23 @@ Aplicativos > "Monitor de Processos" (os dados NÃO são apagados). Pasta de dad
 Rotina de manutenção (quem gera o instalador): instalador\build.sh, descrito em instalador\LEIA-ME.txt.
 
 26. DJEN SEPARADO DO DATAJUD (v0.6.2)
-- Botão "Atualizar só o DJEN agora" (Painel): consulta apenas as publicações (DJEN) dos processos monitorados e os filtros de
+- Botão "Atualizar só o DJEN agora" (aba Processos): consulta apenas as publicações (DJEN) dos processos monitorados e os filtros de
   OAB/CPF/texto. Não consulta o DataJud. Serve para ver as publicações do dia sem esperar a varredura.
 - Na varredura automática o DJEN passou a ter a sua própria conta diária: um processo cujo DataJud já foi consultado hoje, mas cujo DJEN
   ainda não, é consultado no DJEN no bloco seguinte. O Painel mostra "DJEN: N de M consultados hoje".
 - A varredura só acontece com o computador LIGADO e o programa ABERTO (janela preta) depois da hora de início (Configurações). Se o computador
   estava desligado às 02:00, ela começa assim que o programa é aberto. Se o painel mostrar "DJEN: DESLIGADO", marque
   "Consultar também as publicações do DJEN" em Configurações.
+
+27. PÁGINA INICIAL (v0.6.3)
+A aba "Início" é a primeira tela e resume a carteira. A aba que antes se chamava "Painel" passou a se chamar "Processos" (a lista de
+processos, com os botões de consulta); nada mudou nela.
+- Cartões (clique para ir ao assunto): processos ativos (monitorados e não monitorados); andamentos novos (DataJud) e em quantos
+  processos; publicações novas (DJEN), quantas estão em análise e quantas saíram nos últimos 7 dias; filtros de pesquisa (OAB/CPF/texto); atenção
+  (processos com erro, que não constam no DataJud, com aviso ou com erro no DJEN).
+- Faixa de estado: última consulta e o andamento da varredura de hoje, separado entre DataJud e DJEN.
+- Gráfico dos últimos 14 dias: andamentos (pela data do andamento) e publicações (pela data de disponibilização).
+- Publicações por situação (novas, em análise, tratadas), processos por tribunal, equipe (processos e publicações novas por responsável),
+  os andamentos e publicações novos mais recentes e a lista de processos que precisam de atenção.
+Regras: só processos ativos entram; cópias idênticas de uma publicação contam uma vez; a página se atualiza sozinha a cada 30 segundos.
+Os números vêm do que o programa já guardou: não é uma consulta nova ao CNJ. Andamentos têm a defasagem do DataJud.

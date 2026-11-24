@@ -801,6 +801,68 @@ class Banco:
     def total_monitorados(self):
         return self._linhas("SELECT COUNT(*) AS n FROM processos WHERE ativo=1 AND monitorar=1")[0]["n"]
 
+    def dashboard(self, hoje=None, dias=14):
+        """Números da página inicial. Tudo calculado no banco (rápido mesmo com 1.400+ processos).
+        Publicações contam por GRUPO (cópias idênticas = 1). Só entram processos ativos, exceto onde indicado."""
+        hoje = hoje or dt.date.today()
+        q = self._linhas
+        n = lambda v: int(v or 0)  # noqa: E731
+        p = q("""SELECT COUNT(*) AS total, SUM(ativo=1) AS ativos, SUM(ativo=1 AND monitorar=1) AS monitorados,
+                        SUM(ativo=1 AND monitorar=0) AS nao_monitorados, SUM(ativo=0) AS arquivados,
+                        SUM(ativo=1 AND monitorar=1 AND status='erro') AS erros,
+                        SUM(ativo=1 AND monitorar=1 AND status='nao_encontrado') AS nao_constam,
+                        SUM(ativo=1 AND monitorar=1 AND status='pendente') AS pendentes,
+                        SUM(ativo=1 AND COALESCE(aviso,'')<>'') AS avisos,
+                        SUM(ativo=1 AND monitorar=1 AND dje_status='erro') AS dje_erros
+                 FROM processos""")[0]
+        mv = q("""SELECT COUNT(*) AS novos, COUNT(DISTINCT m.processo_id) AS processos
+                  FROM movimentos m JOIN processos p ON p.id=m.processo_id WHERE m.visto=0 AND p.ativo=1""")[0]
+        ini = (hoje - dt.timedelta(days=dias - 1)).isoformat()
+        por_mov = {r["d"]: r["n"] for r in q(
+            "SELECT substr(data_hora,1,10) AS d, COUNT(*) AS n FROM movimentos m JOIN processos p ON p.id=m.processo_id "
+            "WHERE p.ativo=1 AND substr(data_hora,1,10)>=? GROUP BY d", (ini,))}
+        por_pub = {r["d"]: r["n"] for r in q(
+            "SELECT substr(data_disp,1,10) AS d, COUNT(DISTINCT b.processo_id||'|'||b.grupo) AS n FROM publicacoes b "
+            "JOIN processos p ON p.id=b.processo_id WHERE p.ativo=1 AND b.cancelada=0 AND substr(data_disp,1,10)>=? GROUP BY d", (ini,))}
+        serie = []
+        for i in range(dias):
+            dia = (hoje - dt.timedelta(days=dias - 1 - i)).isoformat()
+            serie.append({"dia": dia, "movimentos": por_mov.get(dia, 0), "publicacoes": por_pub.get(dia, 0)})
+        sit = {s: 0 for s in SITUACOES}
+        for r in q("SELECT b.situacao AS s, COUNT(DISTINCT b.processo_id||'|'||b.grupo) AS n FROM publicacoes b "
+                   "JOIN processos p ON p.id=b.processo_id WHERE p.ativo=1 AND b.cancelada=0 GROUP BY b.situacao"):
+            if r["s"] in sit:
+                sit[r["s"]] = r["n"]
+        trib = q("""SELECT alias, COUNT(*) AS total, SUM(status='erro') AS erros FROM processos
+                    WHERE ativo=1 GROUP BY alias ORDER BY total DESC, alias LIMIT 8""")
+        resp = {}
+        for r in q("SELECT p.responsavel_id AS rid, " + self._sql_resp() + " AS nome, COUNT(*) AS n FROM processos p "
+                   "WHERE p.ativo=1 AND p.monitorar=1 GROUP BY p.responsavel_id"):
+            resp[r["rid"]] = {"nome": r["nome"] or "(sem responsável)", "processos": r["n"], "pubs_novas": 0}
+        for r in q("SELECT p.responsavel_id AS rid, " + self._sql_resp() + " AS nome, COUNT(DISTINCT b.processo_id||'|'||b.grupo) AS n "
+                   "FROM publicacoes b JOIN processos p ON p.id=b.processo_id "
+                   "WHERE b.situacao='nova' AND b.cancelada=0 AND p.ativo=1 GROUP BY p.responsavel_id"):
+            resp.setdefault(r["rid"], {"nome": r["nome"] or "(sem responsável)", "processos": 0, "pubs_novas": 0})["pubs_novas"] = r["n"]
+        ult_mov = q("""SELECT p.id AS pid, p.numero, p.apelido, p.cliente, m.nome, m.data_hora
+                       FROM movimentos m JOIN processos p ON p.id=m.processo_id WHERE m.visto=0 AND p.ativo=1
+                       ORDER BY m.data_hora DESC, m.id DESC LIMIT 8""")
+        ult_pub = []
+        for b in self.publicacoes(None, so_novas=True, limite=8):
+            ult_pub.append({"pid": b["processo_id"], "numero": b["numero"], "apelido": b["apelido"], "cliente": b["cliente"],
+                            "data_disp": b["data_disp"], "tipo_com": b["tipo_com"], "orgao": b["orgao"], "copias": b["copias"],
+                            "responsavel_nome": b.get("responsavel_nome"),
+                            "trecho": re.sub(r"^Processo:\s*\S+\s*Conteudo:\s*", "", agrupar.texto_base(b.get("texto")), flags=re.I)[:170]})
+        com_erro = q("""SELECT id AS pid, numero, apelido, cliente, status, mensagem FROM processos
+                        WHERE ativo=1 AND monitorar=1 AND status IN ('erro','nao_encontrado') ORDER BY ultima_consulta DESC LIMIT 5""")
+        parados = len(self.sem_andamento((hoje - dt.timedelta(days=90)).isoformat()))
+        return {"processos": {k: n(v) for k, v in p.items()},
+                "movimentos": {"novos": n(mv["novos"]), "processos": n(mv["processos"])},
+                "publicacoes": {"situacao": sit, "novas": sit["nova"], "ultimos_dias": sum(x["publicacoes"] for x in serie[-7:])},
+                "serie": serie, "tribunais": [{"alias": r["alias"], "total": n(r["total"]), "erros": n(r["erros"])} for r in trib],
+                "responsaveis": sorted(resp.values(), key=lambda x: (-x["pubs_novas"], -x["processos"])),
+                "ultimas_movimentacoes": ult_mov, "ultimas_publicacoes": ult_pub, "com_erro": com_erro,
+                "parados_90d": parados, "ultima_consulta": self.ultima_consulta_geral()}
+
     def total_avisos(self):
         return self._linhas("SELECT COUNT(*) AS n FROM processos WHERE COALESCE(aviso,'')<>''")[0]["n"]
 

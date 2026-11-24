@@ -45,6 +45,16 @@
   .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:14px; }
   .cards .card { margin:0; } .cards b { display:block; font-size:24px; }
   .cards .card.dest { border-left:4px solid var(--c); } .cards .card.dest b { font-size:30px; }
+  :root { --pubcor:#c98a1b; --movcor:#2a6fb0; } html[data-modo="dark"] { --pubcor:#e0a84a; --movcor:#6aaee6; }
+  .gi { margin-bottom:0; align-items:start; } .gi > .card { margin-bottom:14px; }
+  .cards .card.clic { cursor:pointer; } .cards .card.clic:hover { filter:brightness(.97); border-color:var(--ac); }
+  .cards .card small { display:block; color:var(--mut); font-size:12.5px; margin-top:2px; }
+  .brr { display:flex; align-items:center; gap:8px; margin:5px 0; font-size:13.5px; } .brr .rot { width:92px; flex:none; color:var(--mut); } .brr .tr { flex:1; background:var(--bd); border-radius:99px; height:10px; overflow:hidden; display:flex; } .brr .tr i { display:block; height:10px; } .brr .v { width:48px; text-align:right; flex:none; font-variant-numeric:tabular-nums; }
+  .lst { list-style:none; margin:8px 0 0; padding:0; } .lst li { padding:7px 0; border-top:1px solid var(--bd); font-size:13.5px; cursor:pointer; } .lst li:first-child { border-top:0; } .lst li:hover { background:color-mix(in srgb,var(--ac) 7%,transparent); }
+  .lst .t { display:flex; justify-content:space-between; gap:8px; } .lst .mut { font-size:12.5px; }
+  #i-serie svg { width:100%; height:auto; display:block; } #i-serie text { fill:var(--mut); font-size:10px; font-family:inherit; }
+  .lg-pt { display:inline-block; width:10px; height:10px; border-radius:2px; margin:0 3px 0 10px; vertical-align:-1px; }
+  table.mini { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:6px; } table.mini th { text-align:left; color:var(--mut); font-weight:500; padding:4px 6px 4px 0; } table.mini td { padding:5px 6px 5px 0; border-top:1px solid var(--bd); } table.mini td.n, table.mini th.n { text-align:right; }
   .d-info { --c:var(--ac); } .d-warn { --c:var(--warn); } .d-err { --c:var(--err); } .d-ok { --c:var(--ok); }
   /* botões */
   button.b { background:var(--btn); color:#fff; border:1px solid var(--btn); border-radius:var(--rb); padding:8px 16px; cursor:pointer; font:inherit; }
@@ -180,7 +190,8 @@
 <div class="aviso"><b>Atenção:</b> movimentações vêm do DataJud (metadados, com defasagem) e publicações do DJEN (Comunica PJe).
 Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, as intimações oficiais nem o controle de prazos.</b></div>
 <nav id="nav">
-  <button data-t="painel" class="on">Painel</button>
+  <button data-t="inicio" class="on">Início</button>
+  <button data-t="painel">Processos</button>
   <button data-t="publicacoes">Publicações <span class="badge hide" id="nav-pub"></span></button>
   <button data-t="oab">Filtros <span class="badge hide" id="nav-oab"></span></button>
   <button data-t="adicionar">Adicionar</button>
@@ -190,7 +201,24 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   <button data-t="sobre">Sobre</button>
 </nav>
 <main>
-<section id="t-painel">
+<section id="t-inicio">
+  <div class="cards" id="i-cards"></div>
+  <div class="card" id="i-estado"></div>
+  <div class="grid2 gi">
+    <div class="card"><b>Últimos 14 dias</b> <span class="mut" id="i-serie-leg"></span><div id="i-serie"></div></div>
+    <div class="card"><b>Publicações por situação</b><div id="i-sit"></div><b style="display:block;margin-top:16px">Processos por tribunal</b><div id="i-trib"></div></div>
+  </div>
+  <div class="grid2 gi">
+    <div class="card"><b>Andamentos novos</b> <span class="mut">(mais recentes)</span><div id="i-mov"></div></div>
+    <div class="card"><b>Publicações novas</b> <span class="mut">(mais recentes)</span><div id="i-pub"></div></div>
+  </div>
+  <div class="grid2 gi">
+    <div class="card"><b>Equipe</b> <span class="mut">(processos monitorados e publicações novas por responsável)</span><div id="i-resp"></div></div>
+    <div class="card"><b>Atenção</b><div id="i-aten"></div></div>
+  </div>
+  <p class="mut" style="font-size:12.5px">Os números contam só processos ativos. Publicações iguais enviadas a várias partes contam uma vez. Andamentos vêm do DataJud (com defasagem); o gráfico usa a data do andamento/da disponibilização.</p>
+</section>
+<section id="t-painel" class="hide">
   <div class="cards">
     <div class="card"><span class="mut">Processos</span><b id="c-total">0</b></div>
     <div class="card"><span class="mut">Monitorados (consulta diária)</span><b id="c-mon">0</b></div>
@@ -521,10 +549,73 @@ $("#t-aparencia").onclick = async (e) => {
 };
 aplicarAparencia();
 
+// ---- Início (dashboard)
+const SIT_COR = { nova: "var(--err)", analise: "var(--warn)", tratada: "var(--ok)" };
+const SIT_ROT = { nova: "Novas", analise: "Em análise", tratada: "Tratadas" };
+function irPara(aba, filtro) {
+  document.querySelector(`#nav button[data-t="${aba}"]`).click();
+  if (aba === "painel" && filtro) { $("#f-sit").value = filtro; renderLista(); }
+}
+function nomeProc(x) { return esc(x.apelido || x.cliente || x.numero); }
+function serieSvg(serie) {
+  const W = 560, H = 170, pb = 22, pt = 8, n = serie.length, max = Math.max(1, ...serie.flatMap(x => [x.movimentos, x.publicacoes]));
+  const gw = W / n, bw = Math.min(14, gw / 2.6), alt = (v) => (H - pb - pt) * v / max;
+  let g = `<line x1="0" x2="${W}" y1="${H - pb}" y2="${H - pb}" stroke="var(--bd)"/>`;
+  serie.forEach((x, i) => {
+    const cx = gw * i + gw / 2, d = x.dia.slice(8, 10) + "/" + x.dia.slice(5, 7);
+    const hm = alt(x.movimentos), hp = alt(x.publicacoes);
+    g += `<rect x="${cx - bw - 1}" y="${H - pb - hm}" width="${bw}" height="${hm}" rx="2" fill="var(--movcor)"><title>${d}: ${x.movimentos} andamento(s)</title></rect>`;
+    g += `<rect x="${cx + 1}" y="${H - pb - hp}" width="${bw}" height="${hp}" rx="2" fill="var(--pubcor)"><title>${d}: ${x.publicacoes} publicação(ões)</title></rect>`;
+    if (x.movimentos) g += `<text x="${cx - bw / 2 - 1}" y="${H - pb - hm - 3}" text-anchor="middle">${x.movimentos}</text>`;
+    if (x.publicacoes) g += `<text x="${cx + bw / 2 + 1}" y="${H - pb - hp - 3}" text-anchor="middle">${x.publicacoes}</text>`;
+    if (i % 2 === 0 || n <= 8) g += `<text x="${cx}" y="${H - 6}" text-anchor="middle">${d}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Andamentos e publicações por dia nos últimos 14 dias">${g}</svg>`;
+}
+function barras(itens, cor) { // itens: [{rot, v, max?}]
+  const m = Math.max(1, ...itens.map(i => i.v));
+  return itens.map(i => `<div class="brr"><span class="rot">${esc(i.rot)}</span><span class="tr"><i style="width:${Math.round(100 * i.v / m)}%;background:${i.cor || cor}"></i></span><span class="v">${i.v}</span></div>`).join("") || '<p class="mut">Sem dados.</p>';
+}
+async function carregarDashboard() {
+  let d; try { d = await api("/api/dashboard"); } catch (e) { return; }
+  const p = d.processos, mv = d.movimentos, pb = d.publicacoes, v = d.varredura || {};
+  const atencao = p.erros + p.nao_constam + p.avisos + p.dje_erros;
+  $("#i-cards").innerHTML = [
+    ["info", "Processos ativos", p.ativos, `${p.monitorados} monitorados · ${p.nao_monitorados} não monitorados${p.arquivados ? " · " + p.arquivados + " arquivados" : ""}`, "painel", "ativos"],
+    ["ok", "Andamentos novos", mv.novos, mv.novos ? `em ${mv.processos} processo(s)` : "nada pendente", "painel", "novidades"],
+    ["info", "Publicações novas", pb.novas, `${pb.situacao.analise} em análise · ${pb.ultimos_dias} nos últimos 7 dias`, "publicacoes", ""],
+    ["", "Filtros de pesquisa", d.filtros_novas, d.filtros_ativos ? `publicação(ões) nova(s) em ${d.filtros_ativos} filtro(s)` : "nenhum filtro cadastrado", "oab", ""],
+    ["warn", "Atenção", atencao, atencao ? `${p.erros} com erro · ${p.nao_constam} não constam · ${p.avisos} aviso(s) · ${p.dje_erros} erro(s) no DJEN` : "tudo em ordem", "painel", "erros"],
+  ].map(([c, t, n, sub, aba, f]) => `<div class="card clic ${c ? "dest d-" + c : ""}" data-ir="${aba}" data-f="${f}"><span class="mut">${t}</span><b>${n}</b><small>${esc(sub)}</small></div>`).join("");
+  const dje = !d.dje_ativo ? '<span class="warn">DJEN desligado em Configurações</span>' : `DJEN: ${v.dje_feitos_hoje ?? 0} de ${v.ativos ?? p.monitorados} consultados hoje`;
+  const vr = v.ativa ? `Varredura diária: DataJud ${v.feitos_hoje} de ${v.ativos} · ${dje}${v.restantes === 0 && v.dje_restantes === 0 ? " · concluída por hoje" : (v.na_janela ? "" : " · começa às " + v.inicio)}` : dje;
+  $("#i-estado").innerHTML = `<span class="mut">Última consulta:</span> ${fmtUtc(d.ultima_consulta)} · ${vr}` + (d.rodando ? ` · <b>consultando… ${esc(d.progresso || "")}</b>` : "") +
+    ` <span class="mut">· A varredura só roda com o computador ligado e o programa aberto.</span>`;
+  $("#i-serie").innerHTML = serieSvg(d.serie);
+  $("#i-serie-leg").innerHTML = '<span class="lg-pt" style="background:var(--movcor)"></span>andamentos<span class="lg-pt" style="background:var(--pubcor)"></span>publicações';
+  const tot = Math.max(1, pb.situacao.nova + pb.situacao.analise + pb.situacao.tratada);
+  $("#i-sit").innerHTML = `<div class="brr"><span class="tr" style="height:14px">${["nova", "analise", "tratada"].map(k => `<i style="width:${100 * pb.situacao[k] / tot}%;background:${SIT_COR[k]};height:14px" title="${SIT_ROT[k]}: ${pb.situacao[k]}"></i>`).join("")}</span></div>` +
+    `<div style="font-size:13.5px">${["nova", "analise", "tratada"].map(k => `<span class="lg-pt" style="background:${SIT_COR[k]};margin-left:0;margin-right:4px"></span>${SIT_ROT[k]}: <b>${pb.situacao[k]}</b>`).join(" &nbsp; ")}</div>`;
+  $("#i-trib").innerHTML = barras(d.tribunais.map(t => ({ rot: t.alias.toUpperCase(), v: t.total })), "var(--ac)");
+  $("#i-mov").innerHTML = d.ultimas_movimentacoes.length ? `<ul class="lst">${d.ultimas_movimentacoes.map(x => `<li data-mov="${x.pid}"><div class="t"><b>${nomeProc(x)}</b><span class="mut">${fmt(x.data_hora)}</span></div><div>${esc(x.nome)}</div><div class="mut num">${esc(x.numero)}</div></li>`).join("")}</ul>` : '<p class="mut">Nenhum andamento novo.</p>';
+  $("#i-pub").innerHTML = d.ultimas_publicacoes.length ? `<ul class="lst">${d.ultimas_publicacoes.map(x => `<li data-pub="1"><div class="t"><b>${nomeProc(x)}${x.copias > 1 ? ` <span class="mut">×${x.copias}</span>` : ""}</b><span class="mut">${fmt(x.data_disp)}</span></div><div class="mut">${esc(x.tipo_com)} · ${esc(x.orgao)}${x.responsavel_nome ? " · " + esc(x.responsavel_nome) : ""}</div><div>${esc(x.trecho)}${x.trecho.length >= 170 ? "…" : ""}</div></li>`).join("")}</ul>` : '<p class="mut">Nenhuma publicação nova.</p>';
+  $("#i-resp").innerHTML = d.responsaveis.length ? `<table class="mini"><tr><th>Responsável</th><th class="n">Processos</th><th class="n">Publ. novas</th></tr>${d.responsaveis.map(r => `<tr><td>${esc(r.nome)}</td><td class="n">${r.processos}</td><td class="n">${r.pubs_novas ? `<b>${r.pubs_novas}</b>` : 0}</td></tr>`).join("")}</table>` : '<p class="mut">Sem processos monitorados.</p>';
+  const aten = [];
+  if (d.com_erro.length) aten.push(`<ul class="lst">${d.com_erro.map(x => `<li data-mov="${x.pid}"><div class="t"><b>${nomeProc(x)}</b><span class="${x.status === "erro" ? "err" : "warn"}">${x.status === "erro" ? "erro" : "não consta no DataJud"}</span></div><div class="mut">${esc(x.mensagem || "")}</div></li>`).join("")}</ul>`);
+  if (d.parados_90d) aten.push(`<p>${d.parados_90d} processo(s) ativo(s) sem andamento nem publicação há mais de 90 dias <a href="#" data-ir="painel" data-f="ativos">(ver Processos)</a>.</p>`);
+  $("#i-aten").innerHTML = aten.join("") || '<p class="mut">Nada que exija atenção agora.</p>';
+}
+$("#t-inicio").onclick = (e) => {
+  const c = e.target.closest("[data-ir]"); if (c) { e.preventDefault(); irPara(c.dataset.ir, c.dataset.f); return; }
+  const m = e.target.closest("[data-mov]"); if (m) { irPara("painel"); verMovimentos(m.dataset.mov); return; }
+  if (e.target.closest("[data-pub]")) irPara("publicacoes");
+};
+
 // abas
 document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x === b));
   document.querySelectorAll("main > section").forEach(s => s.classList.toggle("hide", s.id !== "t-" + b.dataset.t));
+  if (b.dataset.t === "inicio") carregarDashboard();
   if (b.dataset.t === "config") carregarConfig();
   if (b.dataset.t === "equipe") carregarEquipe();
   if (b.dataset.t === "sobre") carregarSobre();
@@ -1112,8 +1203,9 @@ $("#b-aud").onclick = () => carregarAuditoria().catch(e => aviso(e.message));
   $("#usr-nome").textContent = EU.nome + (EU.perfil === "admin" ? " (administrador)" : "");
   $("#usr").classList.remove("hide");
   if (EU.trocar_senha) { abrirSenha(true); return; }
-  await carregarLista(); await status();
+  await carregarLista(); await status(); carregarDashboard();
   setInterval(status, 4000); setInterval(carregarLista, 30000);
+  setInterval(() => { if (!$("#t-inicio").classList.contains("hide") && !document.hidden) carregarDashboard(); }, 30000);
 })();
 </script>
 </body>
