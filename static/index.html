@@ -202,10 +202,16 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
 </nav>
 <main>
 <section id="t-inicio">
+  <div class="acoes" style="margin-bottom:12px;align-items:end">
+    <div><label for="i-f-dias">Período do gráfico</label><select id="i-f-dias"><option value="7">7 dias</option><option value="14" selected>14 dias</option><option value="30">30 dias</option><option value="60">60 dias</option><option value="90">90 dias</option></select></div>
+    <div><label for="i-f-resp">Responsável</label><select id="i-f-resp"><option value="">Toda a equipe</option><option value="sem">(sem responsável)</option></select></div>
+    <div><label for="i-f-cli">Cliente</label><select id="i-f-cli"><option value="">Todos</option></select></div>
+    <button class="b sec sm" id="i-f-limpar" type="button">Limpar filtros</button>
+  </div>
   <div class="cards" id="i-cards"></div>
   <div class="card" id="i-estado"></div>
   <div class="grid2 gi">
-    <div class="card"><b>Últimos 14 dias</b> <span class="mut" id="i-serie-leg"></span><div id="i-serie"></div></div>
+    <div class="card"><b id="i-serie-tit">Últimos 14 dias</b> <span class="mut" id="i-serie-leg"></span><div id="i-serie"></div></div>
     <div class="card"><b>Publicações por situação</b><div id="i-sit"></div><b style="display:block;margin-top:16px">Processos por tribunal</b><div id="i-trib"></div></div>
   </div>
   <div class="grid2 gi">
@@ -558,17 +564,17 @@ function irPara(aba, filtro) {
 }
 function nomeProc(x) { return esc(x.apelido || x.cliente || x.numero); }
 function serieSvg(serie) {
-  const W = 560, H = 170, pb = 22, pt = 8, n = serie.length, max = Math.max(1, ...serie.flatMap(x => [x.movimentos, x.publicacoes]));
-  const gw = W / n, bw = Math.min(14, gw / 2.6), alt = (v) => (H - pb - pt) * v / max;
+  const W = 560, H = 176, pb = 22, pt = 16, px = 16, n = serie.length, max = Math.max(1, ...serie.flatMap(x => [x.movimentos, x.publicacoes]));
+  const gw = (W - 2 * px) / n, bw = Math.min(14, Math.max(1.5, gw / 2.6)), alt = (v) => (H - pb - pt) * v / max;
   let g = `<line x1="0" x2="${W}" y1="${H - pb}" y2="${H - pb}" stroke="var(--bd)"/>`;
   serie.forEach((x, i) => {
-    const cx = gw * i + gw / 2, d = x.dia.slice(8, 10) + "/" + x.dia.slice(5, 7);
+    const cx = px + gw * i + gw / 2, d = x.dia.slice(8, 10) + "/" + x.dia.slice(5, 7);
     const hm = alt(x.movimentos), hp = alt(x.publicacoes);
     g += `<rect x="${cx - bw - 1}" y="${H - pb - hm}" width="${bw}" height="${hm}" rx="2" fill="var(--movcor)"><title>${d}: ${x.movimentos} andamento(s)</title></rect>`;
     g += `<rect x="${cx + 1}" y="${H - pb - hp}" width="${bw}" height="${hp}" rx="2" fill="var(--pubcor)"><title>${d}: ${x.publicacoes} publicação(ões)</title></rect>`;
-    if (x.movimentos) g += `<text x="${cx - bw / 2 - 1}" y="${H - pb - hm - 3}" text-anchor="middle">${x.movimentos}</text>`;
-    if (x.publicacoes) g += `<text x="${cx + bw / 2 + 1}" y="${H - pb - hp - 3}" text-anchor="middle">${x.publicacoes}</text>`;
-    if (i % 2 === 0 || n <= 8) g += `<text x="${cx}" y="${H - 6}" text-anchor="middle">${d}</text>`;
+    if (x.movimentos && n <= 31) g += `<text x="${cx - bw / 2 - 1}" y="${H - pb - hm - 3}" text-anchor="middle">${x.movimentos}</text>`;
+    if (x.publicacoes && n <= 31) g += `<text x="${cx + bw / 2 + 1}" y="${H - pb - hp - 3}" text-anchor="middle">${x.publicacoes}</text>`;
+    if (i % Math.max(1, Math.ceil(n / 14)) === 0) g += `<text x="${cx}" y="${H - 6}" text-anchor="middle">${d}</text>`;
   });
   return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Andamentos e publicações por dia nos últimos 14 dias">${g}</svg>`;
 }
@@ -576,8 +582,13 @@ function barras(itens, cor) { // itens: [{rot, v, max?}]
   const m = Math.max(1, ...itens.map(i => i.v));
   return itens.map(i => `<div class="brr"><span class="rot">${esc(i.rot)}</span><span class="tr"><i style="width:${Math.round(100 * i.v / m)}%;background:${i.cor || cor}"></i></span><span class="v">${i.v}</span></div>`).join("") || '<p class="mut">Sem dados.</p>';
 }
+let INI_EQ = null;
 async function carregarDashboard() {
-  let d; try { d = await api("/api/dashboard"); } catch (e) { return; }
+  const par = new URLSearchParams({ dias: $("#i-f-dias").value, resp: $("#i-f-resp").value, cliente: $("#i-f-cli").value });
+  let d; try { d = await api("/api/dashboard?" + par); } catch (e) { return; }
+  if (!INI_EQ) { try { INI_EQ = await api("/api/equipe"); $("#i-f-resp").innerHTML += INI_EQ.map(u => `<option value="${u.id}">${esc(u.nome)}</option>`).join(""); $("#i-f-resp").value = par.get("resp"); } catch (e) { INI_EQ = []; } }
+  const cl = $("#i-f-cli"), atual = par.get("cliente");
+  if (cl.options.length - 1 !== d.clientes.length) { cl.innerHTML = '<option value="">Todos</option>' + d.clientes.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join(""); cl.value = atual; }
   const p = d.processos, mv = d.movimentos, pb = d.publicacoes, v = d.varredura || {};
   const atencao = p.erros + p.nao_constam + p.avisos + p.dje_erros;
   $("#i-cards").innerHTML = [
@@ -591,7 +602,9 @@ async function carregarDashboard() {
   const vr = v.ativa ? `Varredura diária: DataJud ${v.feitos_hoje} de ${v.ativos} · ${dje}${v.restantes === 0 && v.dje_restantes === 0 ? " · concluída por hoje" : (v.na_janela ? "" : " · começa às " + v.inicio)}` : dje;
   $("#i-estado").innerHTML = `<span class="mut">Última consulta:</span> ${fmtUtc(d.ultima_consulta)} · ${vr}` + (d.rodando ? ` · <b>consultando… ${esc(d.progresso || "")}</b>` : "") +
     ` <span class="mut">· A varredura só roda com o computador ligado e o programa aberto.</span>`;
-  $("#i-serie").innerHTML = serieSvg(d.serie);
+  $("#i-serie").innerHTML = serieSvg(d.serie); $("#i-serie-tit").textContent = `Últimos ${d.serie.length} dias`;
+  const filtrado = !!(d.filtro.resp || d.filtro.cliente);
+  $("#i-f-limpar").classList.toggle("hide", !filtrado && d.filtro.dias === 14);
   $("#i-serie-leg").innerHTML = '<span class="lg-pt" style="background:var(--movcor)"></span>andamentos<span class="lg-pt" style="background:var(--pubcor)"></span>publicações';
   const tot = Math.max(1, pb.situacao.nova + pb.situacao.analise + pb.situacao.tratada);
   $("#i-sit").innerHTML = `<div class="brr"><span class="tr" style="height:14px">${["nova", "analise", "tratada"].map(k => `<i style="width:${100 * pb.situacao[k] / tot}%;background:${SIT_COR[k]};height:14px" title="${SIT_ROT[k]}: ${pb.situacao[k]}"></i>`).join("")}</span></div>` +
@@ -605,6 +618,8 @@ async function carregarDashboard() {
   if (d.parados_90d) aten.push(`<p>${d.parados_90d} processo(s) ativo(s) sem andamento nem publicação há mais de 90 dias <a href="#" data-ir="painel" data-f="ativos">(ver Processos)</a>.</p>`);
   $("#i-aten").innerHTML = aten.join("") || '<p class="mut">Nada que exija atenção agora.</p>';
 }
+["#i-f-dias", "#i-f-resp", "#i-f-cli"].forEach(i => $(i).onchange = carregarDashboard);
+$("#i-f-limpar").onclick = () => { $("#i-f-dias").value = "14"; $("#i-f-resp").value = ""; $("#i-f-cli").value = ""; carregarDashboard(); };
 $("#t-inicio").onclick = (e) => {
   const c = e.target.closest("[data-ir]"); if (c) { e.preventDefault(); irPara(c.dataset.ir, c.dataset.f); return; }
   const m = e.target.closest("[data-mov]"); if (m) { irPara("painel"); verMovimentos(m.dataset.mov); return; }

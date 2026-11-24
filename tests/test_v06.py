@@ -438,3 +438,33 @@ class TesteInicio(Base):
         html = (HERE.parent / "static" / "index.html").read_text(encoding="utf-8")
         for k in ('data-t="inicio"', 'id="t-inicio"', "carregarDashboard", 'id="t-painel" class="hide"'):
             self.assertIn(k, html)
+
+
+class TesteInicioFiltros(Base):
+    """v0.6.4: filtros de período, responsável e cliente na página inicial."""
+
+    def test_filtros(self):
+        adm = self.admin()
+        b = app.CTX.banco
+        uid = adm.req("GET", "/api/equipe")[1][0]["id"]
+        p1 = b.adicionar(NUM, LIMPO, "trt1", cliente="Vivae")
+        p2 = b.adicionar("0000001-00.2024.8.19.0001", "00000010020248190001", "tjrj", cliente="Sicoob")
+        b.definir_responsavel([p1], uid)
+        hoje = dt.date.today()
+        for pid, k in ((p1, "a"), (p2, "b")):
+            b.conn.execute("INSERT INTO movimentos(processo_id,chave,nome,data_hora,visto,detectado_em) VALUES(?,?,?,?,0,?)",
+                           (pid, k, "Juntada", (hoje - dt.timedelta(days=20)).isoformat() + "T10:00:00", "2026-11-20T00:00:00Z"))
+        b.conn.commit()
+        total = adm.req("GET", "/api/dashboard")[1]
+        self.assertEqual((total["processos"]["ativos"], total["movimentos"]["novos"], len(total["serie"])), (2, 2, 14))
+        self.assertEqual(sum(x["movimentos"] for x in total["serie"]), 0)          # 20 dias atrás: fora dos 14
+        self.assertEqual(sum(x["movimentos"] for x in adm.req("GET", "/api/dashboard?dias=30")[1]["serie"]), 2)
+        self.assertEqual(len(adm.req("GET", "/api/dashboard?dias=5")[1]["serie"]), 14)   # valor inválido volta ao padrão
+        r = adm.req("GET", f"/api/dashboard?resp={uid}")[1]
+        self.assertEqual((r["processos"]["ativos"], r["movimentos"]["novos"]), (1, 1))
+        self.assertEqual(adm.req("GET", "/api/dashboard?resp=sem")[1]["processos"]["ativos"], 1)
+        c = adm.req("GET", "/api/dashboard?cliente=Sicoob")[1]
+        self.assertEqual((c["processos"]["ativos"], c["movimentos"]["novos"]), (1, 1))
+        self.assertEqual(sorted(c["clientes"]), ["Sicoob", "Vivae"])                  # a lista de opções não some ao filtrar
+        self.assertEqual(adm.req("GET", "/api/dashboard?cliente=Inexistente")[1]["processos"]["ativos"], 0)
+        self.assertEqual(adm.req("GET", "/api/dashboard?resp=abc'--")[1]["processos"]["ativos"], 2)   # lixo é ignorado, sem erro

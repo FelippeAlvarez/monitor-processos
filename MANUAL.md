@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.6.3)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.6.4)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -308,3 +308,6 @@ processos, com os botões de consulta); nada mudou nela.
   os andamentos e publicações novos mais recentes e a lista de processos que precisam de atenção.
 Regras: só processos ativos entram; cópias idênticas de uma publicação contam uma vez; a página se atualiza sozinha a cada 30 segundos.
 Os números vêm do que o programa já guardou: não é uma consulta nova ao CNJ. Andamentos têm a defasagem do DataJud.
+Filtros da página inicial (v0.6.4): no alto da aba "Início" há o período do gráfico (7, 14, 30, 60 ou 90 dias), o responsável e o cliente.
+Os filtros valem para TODA a página (cartões, gráfico, listas, equipe), exceto a faixa "Última consulta/varredura", que é do programa inteiro.
+"Limpar filtros" volta ao padrão. O filtro de cliente usa o nome exatamente como foi cadastrado no processo.

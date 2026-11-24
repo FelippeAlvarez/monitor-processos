@@ -128,7 +128,15 @@ def r_status(h):
 
 def r_dashboard(h):
     """v0.6.3: números da página inicial (um só pedido)."""
-    d = CTX.banco.dashboard()
+    q = parse_qs(urlparse(h.path).query)
+    dias = int((q.get("dias") or ["14"])[0]) if (q.get("dias") or ["14"])[0].isdigit() else 14
+    if dias not in (7, 14, 30, 60, 90):
+        dias = 14
+    resp = (q.get("resp") or [""])[0]
+    if resp != "sem" and not resp.isdigit():
+        resp = ""
+    cliente = (q.get("cliente") or [""])[0].strip()[:120]
+    d = CTX.banco.dashboard(dias=dias, resp=resp or None, cliente=cliente or None)
     d["filtros_novas"] = sum(o["pub_novas"] for o in CTX.banco.oabs())
     d["filtros_ativos"] = len(CTX.banco.oabs_ativas())
     d["varredura"] = CTX.monitor.resumo_varredura()
