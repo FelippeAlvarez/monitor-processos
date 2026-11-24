@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.6.1)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.6.2)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -269,7 +269,7 @@ d) Calcular prazo (botão no cartão da publicação). Você informa a data de d
    ou prorrogações por ato do tribunal, indisponibilidade do sistema, prazo em dobro ou diferenciado. Na dúvida o programa escolhe o prazo mais curto.
    FERRAMENTA DE APOIO: não substitui a conferência nos portais do tribunal nem a análise do advogado. O aviso aparece sempre na janela do cálculo.
 
-25. INSTALAÇÃO COM ATALHO E ATUALIZAÇÕES (v0.6.1)
+25. INSTALAÇÃO COM ATALHO E ATUALIZAÇÕES (v0.6.2)
 Instalação: dê dois cliques em Instalar-MonitorProcessos-vX.Y.Z.exe e responda às perguntas. O programa é instalado em
 %LOCALAPPDATA%\MonitorProcessos (não exige senha de administrador) e cria o atalho "Monitor de Processos" na Área de Trabalho
 e no Menu Iniciar. O Python 3.9+ continua sendo necessário (python.org; marque "Add python.exe to PATH"): o instalador avisa se faltar.
@@ -286,3 +286,12 @@ Para atualizar: feche a janela preta do Monitor e execute o novo Instalar-Monito
 Aplicativos > "Monitor de Processos" (os dados NÃO são apagados). Pasta de dados em outro lugar (Dropbox): crie local.json na pasta
 %LOCALAPPDATA%\MonitorProcessos com {"pasta_dados": "C:\\Users\\Fulano\\Dropbox\\Monitor"}.
 Rotina de manutenção (quem gera o instalador): instalador\build.sh, descrito em instalador\LEIA-ME.txt.
+
+26. DJEN SEPARADO DO DATAJUD (v0.6.2)
+- Botão "Atualizar só o DJEN agora" (Painel): consulta apenas as publicações (DJEN) dos processos monitorados e os filtros de
+  OAB/CPF/texto. Não consulta o DataJud. Serve para ver as publicações do dia sem esperar a varredura.
+- Na varredura automática o DJEN passou a ter a sua própria conta diária: um processo cujo DataJud já foi consultado hoje, mas cujo DJEN
+  ainda não, é consultado no DJEN no bloco seguinte. O Painel mostra "DJEN: N de M consultados hoje".
+- A varredura só acontece com o computador LIGADO e o programa ABERTO (janela preta) depois da hora de início (Configurações). Se o computador
+  estava desligado às 02:00, ela começa assim que o programa é aberto. Se o painel mostrar "DJEN: DESLIGADO", marque
+  "Consultar também as publicações do DJEN" em Configurações.

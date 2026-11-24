@@ -194,6 +194,21 @@ class Rotas(Base):
         aud = self.adm.req("GET", "/api/auditoria")[1]
         self.assertIn("publicacao_situacao", json.dumps(aud))
 
+    def test_botao_so_dje_nao_consulta_datajud(self):
+        chamadas = {"dje": 0, "datajud": 0}
+        m = app.CTX.monitor
+        m.solicitar_dje = lambda ids: chamadas.__setitem__("dje", len(ids)) or len(ids)
+        m.solicitar = lambda *a, **k: chamadas.__setitem__("datajud", 1) or 0
+        m.solicitar_oab = lambda *a, **k: 0
+        app.CTX.config.dados["dje_ativo"] = True
+        st, d, _ = self.maria.req("POST", "/api/consultar-dje", {})
+        self.assertEqual((st, d["enfileirados"]), (200, 1))
+        self.assertEqual(chamadas, {"dje": 1, "datajud": 0})
+        self.assertEqual(self.novo().req("POST", "/api/consultar-dje", {})[0], 401)
+        app.CTX.config.dados["dje_ativo"] = False
+        self.assertEqual(self.maria.req("POST", "/api/consultar-dje", {})[0], 400)
+        self.assertIn("b-consultar-dje", (HERE.parent / "static" / "index.html").read_text(encoding="utf-8"))
+
     def test_situacao_invalida_e_sem_login(self):
         pub = self.adm.req("GET", "/api/publicacoes")[1][0]
         ok = {"processo_id": pub["processo_id"], "grupo": pub["grupo"]}
@@ -337,3 +352,45 @@ class Pagina(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TesteDjeIndependente(unittest.TestCase):
+    """v0.6.2: o DJEN tem a sua própria conta diária e um botão próprio, sem passar pelo DataJud."""
+
+    def _monitor(self):
+        import tempfile
+        from pathlib import Path
+        import config as cfgmod
+        import db as dbmod
+        import monitor as mon
+        d = Path(tempfile.mkdtemp())
+        banco = dbmod.Banco(d / "p.db")
+        cfg = cfgmod.Config(d / "config.json")
+        m = mon.Monitor(banco, cfg)
+        m._dormir = lambda s: None
+        return banco, cfg, m
+
+    def test_candidatos_e_bloco_so_dje(self):
+        import datetime as dt
+        banco, cfg, m = self._monitor()
+        banco.adicionar("0000001-00.2024.8.19.0001", "00000010020248190001", "api_publica_tjrj")
+        ativos = banco.ativos(so_monitorados=True)
+        self.assertEqual(len(ativos), 1)
+        pid = ativos[0]["id"]
+        hoje = dt.datetime.now(dt.timezone.utc)
+        # DataJud consultado hoje, DJEN nunca: tem de entrar só no DJEN
+        banco.conn.execute("UPDATE processos SET ultima_consulta=?, dje_consulta=NULL WHERE id=?",
+                           (hoje.strftime("%Y-%m-%dT%H:%M:%SZ"), pid))
+        banco.conn.commit()
+        self.assertNotIn(pid, m.candidatos_hoje())
+        self.assertIn(pid, m.candidatos_dje_hoje())
+        chamadas = []
+        m.solicitar_dje = lambda ids: chamadas.append(set(ids)) or len(ids)
+        m.solicitar = lambda ids=None, forcar=False: chamadas.append(("dj", set(ids or []))) or 0
+        cfg.dados["varredura"] = {"ativa": True, "bloco": 10, "intervalo_min": 1, "inicio": "00:00"}
+        m.rodando = False
+        self.assertGreaterEqual(m.iniciar_bloco_se_devido(), 1)
+        self.assertIn({pid}, chamadas)
+        r = m.resumo_varredura()
+        self.assertEqual(r["dje_feitos_hoje"], 0)
+        self.assertEqual(r["dje_restantes"], 1)

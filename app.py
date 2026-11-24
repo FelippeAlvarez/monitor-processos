@@ -374,6 +374,14 @@ def r_consultar_todos(h):
     h.json({"ok": True, "enfileirados": _disparar()})
 
 
+def r_consultar_dje(h):
+    """v0.6.2: atualiza só as publicações (DJEN) dos monitorados e os filtros de OAB/CPF/texto, sem consultar o DataJud."""
+    if not CTX.config.dados.get("dje_ativo", True):
+        return h.json({"erro": "A consulta ao DJEN está desligada em Configurações."}, 400)
+    CTX.monitor.solicitar_oab(None, forcar=True)
+    h.json({"ok": True, "enfileirados": CTX.monitor.solicitar_dje_monitorados()})
+
+
 def r_consultar_um(h, pid):
     h.json({"ok": True, "enfileirados": _disparar({int(pid)})})
 
@@ -689,6 +697,7 @@ ROTAS = [
     ("POST", r"/api/processos/(\d+)/consultar", r_consultar_um, "usu"),
     ("POST", r"/api/visto-todos", r_visto_todos, "usu"),
     ("POST", r"/api/consultar", r_consultar_todos, "usu"),
+    ("POST", r"/api/consultar-dje", r_consultar_dje, "usu"),
     ("GET", r"/api/log", r_log, "adm"),
     ("GET", r"/api/config", r_config_get, "adm"),
     ("POST", r"/api/config", r_config_set, "adm"),

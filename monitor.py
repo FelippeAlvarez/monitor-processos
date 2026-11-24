@@ -155,6 +155,18 @@ class Monitor:
         return [p["id"] for p in self.banco.candidatos_varredura(inicio_do_dia_utc(agora))
                 if self.proxima.get(p["id"], 0) <= t]
 
+    def candidatos_dje_hoje(self, agora=None):
+        """Monitorados ainda sem consulta ao DJEN hoje (o DJEN tem a sua própria conta, separada do DataJud)."""
+        t = time.time()
+        return [p["id"] for p in self.banco.candidatos_dje(inicio_do_dia_utc(agora)) if self.proxima_dje.get(p["id"], 0) <= t]
+
+    def solicitar_dje_monitorados(self, forcar=True):
+        """Botão "Consultar só o DJEN": todos os monitorados, sem passar pelo DataJud."""
+        with self._lock:
+            if forcar:
+                self.dje_pausado_ate = 0.0
+        return self.solicitar_dje({p["id"] for p in self.banco.ativos(so_monitorados=True)})
+
     def candidatos_triagem(self):
         """Ids de processos NÃO monitorados a conferir no DJEN (descobrir se a OAB aparece / se há atividade recente)."""
         corte = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=TRIAGEM_DIAS)).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -173,13 +185,18 @@ class Monitor:
         ids = self.candidatos_hoje(agora)[:tam]
         # além dos monitorados (DataJud + DJEN), confere no DJEN — que é rápido — os não monitorados ainda sem OAB identificada
         tri = self.candidatos_triagem()[:tam] if self.config.dados.get("dje_ativo", True) and time.time() >= self.dje_pausado_ate else []
-        if not ids and not tri:
+        # DJEN independente do DataJud: monitorados sem consulta ao DJEN hoje (fora do bloco do DataJud, que já inclui o DJEN)
+        sem_dje = []
+        if self.config.dados.get("dje_ativo", True) and time.time() >= self.dje_pausado_ate:
+            sem_dje = [i for i in self.candidatos_dje_hoje(agora) if i not in set(ids)][:tam]
+        if not ids and not tri and not sem_dje:
             return 0
         self.ultimo_bloco = time.time()
-        log.info("Varredura diária: bloco de %d monitorado(s) e %d conferência(s) de OAB (DJEN)", len(ids), len(tri))
+        log.info("Varredura diária: bloco de %d monitorado(s) (DataJud + DJEN), %d só no DJEN e %d conferência(s) de OAB",
+                 len(ids), len(sem_dje), len(tri))
         n = self.solicitar(set(ids)) if ids else 0
-        if tri:
-            n += self.solicitar_dje(set(tri))
+        if tri or sem_dje:
+            n += self.solicitar_dje(set(tri) | set(sem_dje))
         return n
 
     def resumo_varredura(self, agora=None):
@@ -194,6 +211,9 @@ class Monitor:
                 "restantes": max(0, ativos - feitos), "bloco": int(v.get("bloco", 100)), "intervalo_min": intervalo,
                 "inicio": v.get("inicio"), "na_janela": self.na_janela(agora),
                 "previsao_min": previsao_min, "triagem_restantes": len(self.candidatos_triagem()),
+                "dje_ativo": bool(self.config.dados.get("dje_ativo", True)),
+                "dje_feitos_hoje": self.banco.dje_consultados_desde(inicio_do_dia_utc(agora)),
+                "dje_restantes": len(self.banco.candidatos_dje(inicio_do_dia_utc(agora))),
                 "proximo_bloco": (self.ultimo_bloco + intervalo * 60) if self.ultimo_bloco else None}
 
     def agendar_pendentes(self):

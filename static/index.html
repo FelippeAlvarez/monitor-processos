@@ -207,6 +207,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <p class="warn hide" id="vr-aviso" style="font-size:13px;margin:8px 0 0"></p></div>
   <div class="acoes" style="margin-bottom:12px">
     <button class="b" id="b-consultar">Consultar monitorados agora</button>
+    <button class="b" id="b-consultar-dje" title="Atualiza só as publicações (DJEN) e os filtros de OAB/CPF/texto, sem consultar o DataJud">Atualizar só o DJEN agora</button>
     <button class="b sec" id="b-visto-todos">Marcar tudo como visto</button>
     <span class="mut" id="st-txt" style="align-self:center"></span>
   </div>
@@ -691,6 +692,7 @@ $("#detalhe").onclick = async (e) => {
   if (b.id === "fechar") $("#detalhe").classList.add("hide");
   if (b.dataset.visto) { await api(`/api/processos/${b.dataset.visto}/visto`, "POST", {}); await carregarLista(); verMovimentos(b.dataset.visto); }
 };
+$("#b-consultar-dje").onclick = async () => { try { const r = await api("/api/consultar-dje", "POST", {}); aviso(`DJEN: ${r.enfileirados} processo(s) na fila (mais os filtros de pesquisa). O DataJud não é consultado.`); status(); } catch (e) { aviso(e.message); } };
 $("#b-consultar").onclick = async () => { try { if (LISTA.filter(p => p.ativo && p.monitorar).length > 200 && !await confirmar("Consultar TODOS os processos monitorados agora? Com muitos processos, isso pode demorar bastante e esbarrar nos limites das APIs. A varredura diária já faz isso em blocos, sem você precisar clicar.")) return; const r = await api("/api/consultar", "POST", {}); aviso(`${r.enfileirados} processo(s) na fila de consulta.`); status(); } catch (e) { aviso(e.message); } };
 $("#b-visto-todos").onclick = async () => { await api("/api/visto-todos", "POST", {}); carregarLista(); };
 
@@ -710,7 +712,7 @@ async function status() {
       const pct = v.ativos ? Math.round(100 * v.feitos_hoje / v.ativos) : 100;
       $("#vr-barra").style.width = pct + "%";
       const prev = v.previsao_min >= 60 ? `~${Math.round(v.previsao_min / 6) / 10} h` : `~${v.previsao_min} min`;
-      $("#vr-txt").textContent = `${v.feitos_hoje} de ${v.ativos} processos monitorados consultados hoje${v.triagem_restantes ? ` · ${v.triagem_restantes} conferência(s) de OAB no DJEN a fazer (processos não monitorados)` : ""} · blocos de ${v.bloco} a cada ${v.intervalo_min} min, a partir das ${v.inicio}` +
+      $("#vr-txt").textContent = `${v.feitos_hoje} de ${v.ativos} processos monitorados consultados hoje${v.triagem_restantes ? ` · ${v.triagem_restantes} conferência(s) de OAB no DJEN a fazer (processos não monitorados)` : ""} · DJEN: ${!v.dje_ativo ? "DESLIGADO em Configurações" : `${v.dje_feitos_hoje} de ${v.ativos} consultados hoje`} · blocos de ${v.bloco} a cada ${v.intervalo_min} min, a partir das ${v.inicio}` +
         (v.restantes === 0 ? " · concluída por hoje" : (v.na_janela ? ` · faltam ${prev} no ritmo atual` : " · começa às " + v.inicio));
       const av = $("#vr-aviso");
       av.textContent = v.previsao_min > 16 * 60 ? "Atenção: no ritmo configurado, a varredura não termina em um dia. Aumente o bloco ou diminua o intervalo em Configurações." : "";

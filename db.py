@@ -644,6 +644,16 @@ class Banco:
             "SELECT id, ultima_consulta, status FROM processos WHERE ativo=1 AND monitorar=1 AND COALESCE(ultima_consulta,'')<? "
             "ORDER BY COALESCE(ultima_consulta,'') , id", (inicio_dia_utc,))
 
+    def candidatos_dje(self, inicio_dia_utc):
+        """Monitorados cujo DJEN ainda não foi consultado hoje (independe da consulta do DataJud)."""
+        return self._linhas(
+            "SELECT id FROM processos WHERE ativo=1 AND monitorar=1 AND COALESCE(dje_consulta,'')<? "
+            "ORDER BY COALESCE(dje_consulta,''), id", (inicio_dia_utc,))
+
+    def dje_consultados_desde(self, inicio_dia_utc):
+        return self._linhas("SELECT COUNT(*) AS n FROM processos WHERE ativo=1 AND monitorar=1 AND COALESCE(dje_consulta,'')>=?",
+                            (inicio_dia_utc,))[0]["n"]
+
     def consultados_desde(self, inicio_dia_utc):
         return self._linhas("SELECT COUNT(*) AS n FROM processos WHERE ativo=1 AND monitorar=1 AND COALESCE(ultima_consulta,'')>=?",
                             (inicio_dia_utc,))[0]["n"]
