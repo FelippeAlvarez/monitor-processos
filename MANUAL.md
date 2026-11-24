@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.6.4)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.0)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -311,3 +311,17 @@ Os números vêm do que o programa já guardou: não é uma consulta nova ao CNJ
 Filtros da página inicial (v0.6.4): no alto da aba "Início" há o período do gráfico (7, 14, 30, 60 ou 90 dias), o responsável e o cliente.
 Os filtros valem para TODA a página (cartões, gráfico, listas, equipe), exceto a faixa "Última consulta/varredura", que é do programa inteiro.
 "Limpar filtros" volta ao padrão. O filtro de cliente usa o nome exatamente como foi cadastrado no processo.
+
+28. AGENDA E CALENDÁRIO (v0.7.0)
+A aba "Calendário" reúne audiências, prazos, diligências e outros compromissos, com ou sem processo vinculado.
+- Visões: Mês (grade com feriados em fundo amarelo e recesso forense em cinza) e Lista (agrupada por data). Compromissos em aberto com data vencida aparecem em vermelho; concluídos e cancelados ficam esmaecidos.
+- Criar: botão "+ Novo evento", clique em um dia da grade, ou botão "Agendar" na lista de Processos. O responsável sugerido é o do processo.
+- Campos: título, tipo, data, hora (opcional), local/link, processo, responsável, teor/descrição (explicação da tarefa) e lembretes (dias antes: 30, 15, 10, 7, 5, 3, 2, 1 ou no dia — escolhidos em cada evento).
+- Editar: clique no evento; tipo, data, teor etc. podem ser alterados a qualquer momento. Se outra pessoa alterou o evento depois que você o abriu, o programa avisa (não sobrescreve em silêncio).
+- Concluir (com observação opcional), Reabrir, Cancelar evento (sai da agenda mas fica registrado) e Excluir (definitivo; só o administrador ou quem criou). Cada evento guarda um histórico de alterações.
+- Filtros: processo, responsável (inclui "sem responsável"), tipos (vários), situação, período (na Lista) e texto.
+- Tipos de evento: o administrador cria, renomeia, muda a cor, desativa ou exclui tipos (exclusão só se nenhum evento usa o tipo) em "Tipos de evento".
+- Exportar .ics: baixa os eventos filtrados para abrir no Outlook, Google Agenda ou celular.
+- Início: cartão "Prazos e compromissos" (vencidos, hoje, próximos 7 dias) e lista dos próximos; o selo na aba Calendário mostra vencidos/hoje.
+- Atenção: os lembretes ficam gravados, mas o ENVIO por e-mail só chega na v0.7.2. O programa só avisa com o computador ligado; para prazos fatais, use também o .ics no celular. As datas são sempre conferidas e informadas por você.
+- Remover um processo apaga também os eventos ligados a ele.

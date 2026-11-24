@@ -97,6 +97,41 @@
   /* diálogos próprios */
   dialog { border:1px solid var(--bd); border-radius:var(--rad); background:var(--card); color:var(--tx); max-width:440px; width:calc(100% - 32px); max-height:90vh; overflow:auto; box-shadow:0 16px 48px rgba(10,15,35,.35); }
   #d-prazo { max-width:520px; }
+  /* agenda (v0.7.0) */
+  .cal-bar { display:flex; gap:8px; align-items:end; flex-wrap:wrap; margin-bottom:10px; }
+  .cal-bar > div { min-width:0; }
+  .cal-mes { font-size:18px; font-weight:600; min-width:150px; text-align:center; }
+  .cal-mes::first-letter, .cal-lista .dia::first-letter { text-transform:uppercase; }
+  .cal-grade { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); border-top:1px solid var(--bd); border-left:1px solid var(--bd); background:var(--card); }
+  .cal-grade .sem { padding:5px; font-size:12px; color:var(--mut); text-align:center; border-right:1px solid var(--bd); border-bottom:1px solid var(--bd); background:color-mix(in srgb,var(--mut) 8%,transparent); }
+  .cal-dia { min-height:98px; padding:3px; border-right:1px solid var(--bd); border-bottom:1px solid var(--bd); cursor:pointer; overflow:hidden; }
+  .cal-dia:hover { background:color-mix(in srgb,var(--ac) 6%,transparent); }
+  .cal-dia.fora { opacity:.5; }
+  .cal-dia.fer { background:color-mix(in srgb,var(--warn) 12%,transparent); }
+  .cal-dia.rec { background:color-mix(in srgb,var(--mut) 14%,transparent); }
+  .cal-dia.fds { background:color-mix(in srgb,var(--mut) 7%,transparent); }
+  .cal-dia .n { font-size:12.5px; color:var(--mut); display:flex; justify-content:space-between; gap:4px; }
+  .cal-dia.hoje .n b { background:var(--ac); color:#fff; border-radius:99px; padding:0 7px; }
+  .cal-dia .fn { font-size:10.5px; color:var(--warn); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ev { display:block; margin-top:2px; padding:1px 5px; border-radius:4px; font-size:12px; line-height:1.35; border-left:4px solid var(--c,var(--ac)); background:color-mix(in srgb,var(--c,var(--ac)) 14%,var(--card)); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
+  .ev.atr { border-left-color:var(--err); background:color-mix(in srgb,var(--err) 16%,var(--card)); color:var(--err); font-weight:600; }
+  .ev.concluido { opacity:.55; text-decoration:line-through; }
+  .ev.cancelado { opacity:.45; text-decoration:line-through; font-style:italic; }
+  .cal-mais { font-size:11.5px; color:var(--mut); margin-top:2px; }
+  .cal-lista .dia { margin:14px 0 4px; font-weight:600; }
+  .cal-lista .dia.atr { color:var(--err); }
+  .cal-lista .it { display:flex; gap:10px; align-items:baseline; padding:6px 8px; border:1px solid var(--bd); border-left:5px solid var(--c,var(--ac)); border-radius:6px; margin-bottom:4px; cursor:pointer; background:var(--card); }
+  .cal-lista .it.concluido, .cal-lista .it.cancelado { opacity:.6; }
+  .cal-lista .it .h { min-width:48px; color:var(--mut); }
+  .cal-lista .it .t { flex:1; min-width:0; }
+  .tp-pt { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:5px; background:var(--c); }
+  #d-evento { max-width:600px; }
+  #d-tipos { max-width:560px; }
+  .lemb { display:flex; flex-wrap:wrap; gap:4px 14px; }
+  .lemb label { display:inline-flex; gap:5px; align-items:center; margin:0; font-weight:400; }
+  .linha2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .linha3 { display:grid; grid-template-columns:1.2fr 1fr 1.4fr; gap:10px; }
+  @media (max-width:640px){ .linha2,.linha3 { grid-template-columns:1fr; } .cal-dia { min-height:64px; } .ev { font-size:11px; } }
   dialog::backdrop { background:rgba(10,15,25,.55); }
   #d-conf p { white-space:pre-wrap; margin:0 0 12px; }
   #msg { position:fixed; bottom:16px; right:16px; background:var(--tx); color:var(--bg); padding:10px 14px; border-radius:10px; max-width:380px; display:none; box-shadow:0 8px 24px rgba(10,15,35,.3); }
@@ -174,6 +209,46 @@
   <p class="mut">O responsável recebe por e-mail as publicações novas dos seus processos (se tiver e-mail cadastrado e o envio de alertas estiver ligado).</p>
   <div class="acoes" style="margin-top:12px"><button class="b" type="button" id="dr-ok">Salvar</button><button class="b sec" type="button" id="dr-x">Cancelar</button></div>
 </form></dialog>
+<dialog id="d-evento"><form method="dialog">
+  <h3 style="margin-top:0" id="ev-tit">Novo evento</h3>
+  <input type="hidden" id="ev-id"><input type="hidden" id="ev-versao">
+  <label for="ev-titulo">Título</label><input id="ev-titulo" maxlength="160" style="width:100%" placeholder="ex.: Audiência de instrução; Contestação — último dia">
+  <div class="linha3" style="margin-top:8px">
+    <div><label for="ev-tipo">Tipo</label><select id="ev-tipo" style="width:100%"></select></div>
+    <div><label for="ev-data">Data</label><input type="date" id="ev-data" style="width:100%"></div>
+    <div><label for="ev-hora">Hora (opcional)</label><input type="time" id="ev-hora" style="width:100%"></div>
+  </div>
+  <div class="linha2" style="margin-top:8px">
+    <div><label for="ev-proc">Processo (opcional)</label><input id="ev-proc" list="dl-proc" style="width:100%" placeholder="número, apelido ou cliente" autocomplete="off"></div>
+    <div><label for="ev-resp">Responsável</label><select id="ev-resp" style="width:100%"><option value="">(sem responsável)</option></select></div>
+  </div>
+  <label for="ev-local" style="margin-top:8px">Local ou link (opcional)</label><input id="ev-local" maxlength="200" style="width:100%">
+  <label for="ev-desc" style="margin-top:8px">Teor / descrição (explicação da tarefa)</label><textarea id="ev-desc" rows="4" style="width:100%" maxlength="4000"></textarea>
+  <label style="margin-top:8px">Lembretes (dias antes da data)</label>
+  <div class="lemb" id="ev-lemb"></div>
+  <p class="mut" id="ev-aviso-lemb" style="margin:4px 0 0">Os lembretes ficam gravados no evento; o envio por e-mail começa na v0.7.2 (o programa precisa estar aberto no dia).</p>
+  <p class="mut hide" id="ev-situacao" style="margin:8px 0 0"></p>
+  <details id="ev-logbox" class="hide" style="margin-top:8px"><summary class="mut">Histórico do evento</summary><div id="ev-log" class="mut" style="font-size:12.5px"></div></details>
+  <div class="acoes" style="margin-top:14px">
+    <button class="b" type="button" id="ev-salvar">Salvar</button>
+    <button class="b sec" type="button" id="ev-concluir">Concluir</button>
+    <button class="b sec" type="button" id="ev-reabrir">Reabrir</button>
+    <button class="b sec" type="button" id="ev-cancelar">Cancelar evento</button>
+    <button class="b dg" type="button" id="ev-excluir">Excluir</button>
+    <button class="b sec" type="button" id="ev-fechar">Fechar</button>
+  </div>
+</form></dialog>
+<dialog id="d-tipos"><form method="dialog">
+  <h3 style="margin-top:0">Tipos de evento</h3>
+  <p class="mut">Renomeie, mude a cor ou desative os tipos que não usa. Um tipo só pode ser excluído se nenhum evento o usa; senão, desative-o (some das listas de escolha, mas os eventos antigos continuam).</p>
+  <div id="tp-lista"></div>
+  <div class="acoes" style="margin-top:10px;align-items:end">
+    <div style="flex:1"><label for="tp-novo">Novo tipo</label><input id="tp-novo" maxlength="40" style="width:100%"></div>
+    <div><label for="tp-cor">Cor</label><input type="color" id="tp-cor" value="#2a6fb0"></div>
+    <button class="b" type="button" id="tp-add">Adicionar</button>
+  </div>
+  <div class="acoes" style="margin-top:12px"><button class="b sec" type="button" id="tp-fechar">Fechar</button></div>
+</form></dialog>
 <dialog id="d-prazo"><form method="dialog">
   <h3 style="margin-top:0">Calcular prazo (dias úteis)</h3>
   <p class="mut" id="dz-proc"></p>
@@ -192,6 +267,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
 <nav id="nav">
   <button data-t="inicio" class="on">Início</button>
   <button data-t="painel">Processos</button>
+  <button data-t="calendario">Calendário <span class="badge hide" id="nav-cal"></span></button>
   <button data-t="publicacoes">Publicações <span class="badge hide" id="nav-pub"></span></button>
   <button data-t="oab">Filtros <span class="badge hide" id="nav-oab"></span></button>
   <button data-t="adicionar">Adicionar</button>
@@ -210,6 +286,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   </div>
   <div class="cards" id="i-cards"></div>
   <div class="card" id="i-estado"></div>
+  <div class="card" id="i-agenda"><div class="acoes" style="justify-content:space-between;align-items:center"><b>Prazos e compromissos</b><button class="b sec sm" type="button" data-ir="calendario">Abrir calendário</button></div><div class="cards" id="i-ag-cards" style="margin-top:8px"></div><div id="i-ag-lista"></div></div>
   <div class="grid2 gi">
     <div class="card"><b id="i-serie-tit">Últimos 14 dias</b> <span class="mut" id="i-serie-leg"></span><div id="i-serie"></div></div>
     <div class="card"><b>Publicações por situação</b><div id="i-sit"></div><b style="display:block;margin-top:16px">Processos por tribunal</b><div id="i-trib"></div></div>
@@ -223,6 +300,32 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <div class="card"><b>Atenção</b><div id="i-aten"></div></div>
   </div>
   <p class="mut" style="font-size:12.5px">Os números contam só processos ativos. Publicações iguais enviadas a várias partes contam uma vez. Andamentos vêm do DataJud (com defasagem); o gráfico usa a data do andamento/da disponibilização.</p>
+</section>
+<section id="t-calendario" class="hide">
+  <div class="cal-bar">
+    <button class="b sec sm" id="cal-ant" type="button" aria-label="Mês anterior">‹</button>
+    <div class="cal-mes" id="cal-mes"></div>
+    <button class="b sec sm" id="cal-prox" type="button" aria-label="Próximo mês">›</button>
+    <button class="b sec sm" id="cal-hoje" type="button">Hoje</button>
+    <select id="cal-vis" aria-label="Visão"><option value="mes">Mês</option><option value="lista">Lista</option></select>
+    <span style="flex:1"></span>
+    <button class="b" id="cal-novo" type="button">+ Novo evento</button>
+    <button class="b sec" id="cal-ics" type="button" title="Baixa os eventos filtrados para abrir no Outlook, Google Agenda ou celular">Exportar .ics</button>
+    <button class="b sec so-adm" id="cal-tipos" type="button">Tipos de evento</button>
+  </div>
+  <div class="cal-bar">
+    <div><label for="cal-f-proc">Processo</label><input id="cal-f-proc" list="dl-proc" placeholder="número, apelido ou cliente" autocomplete="off"></div>
+    <div><label for="cal-f-resp">Responsável</label><select id="cal-f-resp"><option value="">Toda a equipe</option><option value="sem">(sem responsável)</option></select></div>
+    <div><label>Tipos</label><details id="cal-f-tipos" style="position:relative"><summary id="cal-f-tipos-r" style="cursor:pointer;list-style:none;padding:8px 12px;border:1px solid var(--bd);border-radius:var(--rad);background:var(--card);min-width:120px">Todos</summary><div class="card" id="cal-f-tipos-l" style="position:absolute;z-index:5;min-width:220px;padding:8px"></div></details></div>
+    <div><label for="cal-f-sit">Situação</label><select id="cal-f-sit"><option value="ativos">Em aberto + concluídos</option><option value="aberto">Só em aberto</option><option value="concluido">Concluídos</option><option value="cancelado">Cancelados</option><option value="todos">Todos</option></select></div>
+    <div class="cal-so-lista"><label for="cal-f-de">De</label><input type="date" id="cal-f-de"></div>
+    <div class="cal-so-lista"><label for="cal-f-ate">Até</label><input type="date" id="cal-f-ate"></div>
+    <div><label for="cal-f-q">Texto</label><input id="cal-f-q" placeholder="título ou teor" autocomplete="off"></div>
+    <button class="b sec sm" id="cal-f-limpar" type="button">Limpar</button>
+  </div>
+  <datalist id="dl-proc"></datalist>
+  <div id="cal-corpo"></div>
+  <p class="mut" style="font-size:12.5px">Em vermelho: compromissos em aberto com data vencida. Fundo amarelo: feriado; cinza: recesso forense (CPC, art. 220) — conforme o calendário de Configurações. As datas dos eventos são informadas por você (a data calculada de um prazo é só sugestão e deve ser conferida). Os lembretes escolhidos em cada evento serão enviados por e-mail a partir da v0.7.2; até lá, use o botão Exportar .ics.</p>
 </section>
 <section id="t-painel" class="hide">
   <div class="cards">
@@ -602,6 +705,7 @@ async function carregarDashboard() {
   const vr = v.ativa ? `Varredura diária: DataJud ${v.feitos_hoje} de ${v.ativos} · ${dje}${v.restantes === 0 && v.dje_restantes === 0 ? " · concluída por hoje" : (v.na_janela ? "" : " · começa às " + v.inicio)}` : dje;
   $("#i-estado").innerHTML = `<span class="mut">Última consulta:</span> ${fmtUtc(d.ultima_consulta)} · ${vr}` + (d.rodando ? ` · <b>consultando… ${esc(d.progresso || "")}</b>` : "") +
     ` <span class="mut">· A varredura só roda com o computador ligado e o programa aberto.</span>`;
+  if (d.agenda) desenharAgendaInicio(d.agenda);
   $("#i-serie").innerHTML = serieSvg(d.serie); $("#i-serie-tit").textContent = `Últimos ${d.serie.length} dias`;
   const filtrado = !!(d.filtro.resp || d.filtro.cliente);
   $("#i-f-limpar").classList.toggle("hide", !filtrado && d.filtro.dias === 14);
@@ -623,14 +727,224 @@ $("#i-f-limpar").onclick = () => { $("#i-f-dias").value = "14"; $("#i-f-resp").v
 $("#t-inicio").onclick = (e) => {
   const c = e.target.closest("[data-ir]"); if (c) { e.preventDefault(); irPara(c.dataset.ir, c.dataset.f); return; }
   const m = e.target.closest("[data-mov]"); if (m) { irPara("painel"); verMovimentos(m.dataset.mov); return; }
+  const ag = e.target.closest("[data-ag]"); if (ag) { irPara("calendario"); abrirEvento(Number(ag.dataset.ag)); return; }
+  const cl = e.target.closest("[data-cal]"); if (cl) { irPara("calendario"); return; }
   if (e.target.closest("[data-pub]")) irPara("publicacoes");
 };
+
+// ---- Calendário / agenda (v0.7.0)
+const CAL = { mes: new Date(new Date().getFullYear(), new Date().getMonth(), 1), tipos: [], tiposSel: new Set(), eq: null, eventos: [], dias: {}, pronto: false };
+const LEMB_OPC = [30, 15, 10, 7, 5, 3, 2, 1, 0];
+const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+const DSEM = ["segunda", "terça", "quarta", "quinta", "sexta", "sábado", "domingo"];
+const iso = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+const hojeIso = () => iso(new Date());
+const dataBr = (s) => s ? s.slice(8, 10) + "/" + s.slice(5, 7) + "/" + s.slice(0, 4) : "";
+function dataExtenso(s) { const d = new Date(s + "T12:00:00"); return `${DSEM[(d.getDay() + 6) % 7]}, ${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`; }
+function rotuloProc(p) { return p.numero + " — " + (p.apelido || p.cliente || "sem apelido"); }
+function procPorRotulo(txt) {
+  txt = (txt || "").trim(); if (!txt) return null;
+  return LISTA.find(p => rotuloProc(p) === txt) || LISTA.find(p => p.numero === txt) || null;
+}
+function atualizarDatalist() { $("#dl-proc").innerHTML = LISTA.map(p => `<option value="${esc(rotuloProc(p))}">${esc(p.cliente || "")}</option>`).join(""); }
+async function prepararAgenda() {
+  if (CAL.pronto) return;
+  try { CAL.tipos = await api("/api/tipos-evento"); } catch (e) { return; }
+  if (!CAL.eq) { try { CAL.eq = await api("/api/equipe"); } catch (e) { CAL.eq = []; } }
+  const opts = CAL.eq.filter(u => u.ativo !== 0 && u.ativo !== false).map(u => `<option value="${u.id}">${esc(u.nome)}</option>`).join("");
+  $("#cal-f-resp").innerHTML = '<option value="">Toda a equipe</option><option value="sem">(sem responsável)</option>' + opts;
+  $("#ev-resp").innerHTML = '<option value="">(sem responsável)</option>' + opts;
+  $("#ev-lemb").innerHTML = LEMB_OPC.map(n => `<label><input type="checkbox" value="${n}">${n === 0 ? "no dia" : n + (n === 1 ? " dia" : " dias")}</label>`).join("");
+  desenharTiposFiltro(); CAL.pronto = true;
+}
+function desenharTiposFiltro() {
+  $("#cal-f-tipos-l").innerHTML = CAL.tipos.map(t => `<label style="display:flex;gap:6px;align-items:center;margin:2px 0;font-weight:400"><input type="checkbox" value="${t.id}" ${CAL.tiposSel.has(t.id) ? "checked" : ""}><span class="tp-pt" style="--c:${t.cor}"></span>${esc(t.nome)}${t.ativo ? "" : ' <span class="mut">(inativo)</span>'}</label>`).join("");
+  $("#cal-f-tipos-r").textContent = CAL.tiposSel.size ? `${CAL.tiposSel.size} selecionado(s)` : "Todos";
+}
+$("#cal-f-tipos-l").onchange = (e) => {
+  const id = Number(e.target.value); e.target.checked ? CAL.tiposSel.add(id) : CAL.tiposSel.delete(id);
+  $("#cal-f-tipos-r").textContent = CAL.tiposSel.size ? `${CAL.tiposSel.size} selecionado(s)` : "Todos"; carregarCalendario();
+};
+function limitesMes() {
+  const ini = new Date(CAL.mes), off = (ini.getDay() + 6) % 7; ini.setDate(1 - off);
+  const fimMes = new Date(CAL.mes.getFullYear(), CAL.mes.getMonth() + 1, 0), semanas = Math.ceil((off + fimMes.getDate()) / 7);
+  const fim = new Date(ini); fim.setDate(ini.getDate() + semanas * 7 - 1);
+  return { ini, fim, semanas };
+}
+function paramsCal() {
+  const p = new URLSearchParams(); const pr = procPorRotulo($("#cal-f-proc").value);
+  if ($("#cal-f-proc").value.trim() && !pr) p.set("processo", "0"); else if (pr) p.set("processo", pr.id);
+  if ($("#cal-f-resp").value) p.set("resp", $("#cal-f-resp").value);
+  CAL.tiposSel.forEach(t => p.append("tipo", t));
+  p.set("situacao", $("#cal-f-sit").value); if ($("#cal-f-q").value.trim()) p.set("q", $("#cal-f-q").value.trim());
+  return p;
+}
+async function carregarCalendario() {
+  await prepararAgenda(); atualizarDatalist();
+  const lista = $("#cal-vis").value === "lista", p = paramsCal();
+  document.querySelectorAll(".cal-so-lista").forEach(x => x.classList.toggle("hide", !lista));
+  $("#cal-mes").textContent = lista ? "Lista de eventos" : `${MESES[CAL.mes.getMonth()]} de ${CAL.mes.getFullYear()}`;
+  $("#cal-ant").classList.toggle("hide", lista); $("#cal-prox").classList.toggle("hide", lista);
+  let L = null;
+  if (lista) {
+    const de = $("#cal-f-de").value, ate = $("#cal-f-ate").value, a = new Date(); a.setDate(a.getDate() + 90);
+    if (de) p.set("de", de); p.set("ate", ate || iso(a));
+  } else { L = limitesMes(); p.set("de", iso(L.ini)); p.set("ate", iso(L.fim)); }
+  try {
+    CAL.eventos = await api("/api/eventos?" + p);
+    CAL.dias = {};
+    if (L) (await api(`/api/calendario/dias?de=${iso(L.ini)}&ate=${iso(L.fim)}`)).forEach(d => CAL.dias[d.dia] = d);
+    else { const ds = CAL.eventos.map(e => e.data).sort(); if (ds.length) (await api(`/api/calendario/dias?de=${ds[0]}&ate=${ds[ds.length - 1] <= ds[0] ? ds[0] : (((new Date(ds[ds.length - 1]) - new Date(ds[0])) / 864e5) > 400 ? iso(new Date(new Date(ds[0]).getTime() + 399 * 864e5)) : ds[ds.length - 1])}`)).forEach(d => CAL.dias[d.dia] = d); }
+  } catch (e) { $("#cal-corpo").innerHTML = `<p class="err">${esc(e.message)}</p>`; return; }
+  lista ? desenharLista() : desenharMes(L);
+}
+function chip(e) {
+  const cl = ["ev", e.situacao !== "aberto" ? e.situacao : "", e.atrasado ? "atr" : ""].join(" ");
+  const proc = e.processo_numero ? ` · ${e.processo_apelido || e.processo_numero}` : "";
+  return `<span class="${cl}" data-ev="${e.id}" style="--c:${e.tipo_cor}" title="${esc(e.tipo_nome + ": " + e.titulo + proc + (e.responsavel_nome ? " (" + e.responsavel_nome + ")" : ""))}">${e.hora ? e.hora + " " : ""}${esc(e.titulo)}</span>`;
+}
+function desenharMes(L) {
+  const por = {}; CAL.eventos.forEach(e => (por[e.data] = por[e.data] || []).push(e));
+  let h = DSEM.map(d => `<div class="sem">${d.slice(0, 3)}</div>`).join(""), d = new Date(L.ini); const hoje = hojeIso();
+  for (let i = 0; i < L.semanas * 7; i++, d.setDate(d.getDate() + 1)) {
+    const s = iso(d), info = CAL.dias[s], evs = por[s] || [], wd = (d.getDay() + 6) % 7;
+    const cls = ["cal-dia", d.getMonth() !== CAL.mes.getMonth() ? "fora" : "", s === hoje ? "hoje" : "", info && info.feriado ? "fer" : (info && info.recesso ? "rec" : (wd > 4 ? "fds" : ""))].join(" ");
+    h += `<div class="${cls}" data-dia="${s}"><div class="n"><b>${d.getDate()}</b></div>${info && (info.feriado || info.recesso) ? `<div class="fn" title="${esc(info.feriado || "Recesso forense")}">${esc(info.feriado || "Recesso")}</div>` : ""}${evs.slice(0, 3).map(chip).join("")}${evs.length > 3 ? `<div class="cal-mais" data-mais="${s}">+${evs.length - 3} mais</div>` : ""}</div>`;
+  }
+  $("#cal-corpo").innerHTML = `<div class="cal-grade">${h}</div>` + (CAL.eventos.length ? "" : '<p class="mut">Nenhum evento neste período com os filtros atuais. Clique em um dia para criar.</p>');
+}
+function desenharLista() {
+  if (!CAL.eventos.length) { $("#cal-corpo").innerHTML = '<p class="mut">Nenhum evento com os filtros atuais.</p>'; return; }
+  const hoje = hojeIso(); let ult = "", h = '<div class="cal-lista">';
+  CAL.eventos.forEach(e => {
+    if (e.data !== ult) { ult = e.data; const inf = CAL.dias[e.data]; h += `<div class="dia ${e.data < hoje ? "atr" : ""}">${dataExtenso(e.data)}${e.data === hoje ? " — hoje" : ""}${inf && inf.feriado ? ` <span class="warn">· ${esc(inf.feriado)}</span>` : ""}${inf && inf.recesso && !inf.feriado ? ' <span class="mut">· recesso</span>' : ""}</div>`; }
+    const proc = e.processo_numero ? `${esc(e.processo_apelido || e.processo_cliente || "")} <span class="mut">${esc(e.processo_numero)}</span>` : '<span class="mut">sem processo</span>';
+    h += `<div class="it ${e.situacao !== "aberto" ? e.situacao : ""}" data-ev="${e.id}" style="--c:${e.tipo_cor}"><span class="h">${e.hora || "—"}</span><span class="t"><b class="${e.atrasado ? "err" : ""}">${esc(e.titulo)}</b> <span class="st">${esc(e.tipo_nome)}</span>${e.situacao !== "aberto" ? ` <span class="st ${e.situacao === "concluido" ? "ok" : ""}">${e.situacao === "concluido" ? "concluído" : "cancelado"}</span>` : ""}${e.atrasado ? ' <span class="st err">vencido</span>' : ""}<br><span class="mut">${proc}${e.responsavel_nome ? " · " + esc(e.responsavel_nome) : ""}${e.local ? " · " + esc(e.local) : ""}</span></span></div>`;
+  });
+  $("#cal-corpo").innerHTML = h + "</div>" + (CAL.eventos.length >= 1000 ? '<p class="warn">Mostrando só os primeiros 1000 eventos; refine os filtros.</p>' : "");
+}
+$("#cal-corpo").onclick = (e) => {
+  const ev = e.target.closest("[data-ev]"); if (ev) { abrirEvento(Number(ev.dataset.ev)); return; }
+  const m = e.target.closest("[data-mais]"); if (m) { $("#cal-f-de").value = $("#cal-f-ate").value = m.dataset.mais; $("#cal-vis").value = "lista"; carregarCalendario(); return; }
+  const d = e.target.closest("[data-dia]"); if (d) abrirEvento(null, { data: d.dataset.dia });
+};
+$("#cal-ant").onclick = () => { CAL.mes = new Date(CAL.mes.getFullYear(), CAL.mes.getMonth() - 1, 1); carregarCalendario(); };
+$("#cal-prox").onclick = () => { CAL.mes = new Date(CAL.mes.getFullYear(), CAL.mes.getMonth() + 1, 1); carregarCalendario(); };
+$("#cal-hoje").onclick = () => { const n = new Date(); CAL.mes = new Date(n.getFullYear(), n.getMonth(), 1); carregarCalendario(); };
+["#cal-vis", "#cal-f-resp", "#cal-f-sit", "#cal-f-proc", "#cal-f-de", "#cal-f-ate"].forEach(i => $(i).onchange = carregarCalendario);
+let calT; $("#cal-f-q").oninput = () => { clearTimeout(calT); calT = setTimeout(carregarCalendario, 350); };
+$("#cal-f-limpar").onclick = () => { ["#cal-f-proc", "#cal-f-q", "#cal-f-de", "#cal-f-ate"].forEach(i => $(i).value = ""); $("#cal-f-resp").value = ""; $("#cal-f-sit").value = "ativos"; CAL.tiposSel.clear(); desenharTiposFiltro(); carregarCalendario(); };
+$("#cal-novo").onclick = () => abrirEvento(null, { data: hojeIso() });
+$("#cal-ics").onclick = () => {
+  const p = paramsCal(); if ($("#cal-vis").value === "mes") { const L = limitesMes(); p.set("de", iso(L.ini)); p.set("ate", iso(L.fim)); } else { if ($("#cal-f-de").value) p.set("de", $("#cal-f-de").value); if ($("#cal-f-ate").value) p.set("ate", $("#cal-f-ate").value); }
+  const a = document.createElement("a"); a.href = "/api/eventos.ics?" + p; a.download = "agenda-monitor.ics"; document.body.appendChild(a); a.click(); a.remove();
+};
+
+// diálogo de evento
+const dEv = $("#d-evento");
+function lembMarcados() { return [...document.querySelectorAll("#ev-lemb input:checked")].map(x => Number(x.value)); }
+function tiposParaEscolha(atualId) { return CAL.tipos.filter(t => t.ativo || t.id === atualId); }
+async function abrirEvento(id, pre = {}) {
+  await prepararAgenda(); atualizarDatalist();
+  let e = null;
+  if (id) { try { e = await api("/api/eventos/" + id); } catch (er) { aviso(er.message); return; } }
+  const ro = !!e && e.situacao !== "aberto";
+  $("#ev-tit").textContent = e ? "Evento" : "Novo evento";
+  $("#ev-id").value = e ? e.id : ""; $("#ev-versao").value = e ? e.versao : "";
+  $("#ev-titulo").value = e ? e.titulo : (pre.titulo || ""); $("#ev-desc").value = e ? e.descricao : (pre.descricao || "");
+  $("#ev-tipo").innerHTML = tiposParaEscolha(e && e.tipo_id).map(t => `<option value="${t.id}">${esc(t.nome)}${t.ativo ? "" : " (inativo)"}</option>`).join("");
+  $("#ev-tipo").value = e ? e.tipo_id : (pre.tipo_id || $("#ev-tipo").options[0].value);
+  $("#ev-data").value = e ? e.data : (pre.data || hojeIso()); $("#ev-hora").value = e ? e.hora : (pre.hora || "");
+  $("#ev-local").value = e ? e.local : (pre.local || "");
+  const pr = e && e.processo_id ? LISTA.find(p => p.id === e.processo_id) : (pre.processo_id ? LISTA.find(p => p.id === pre.processo_id) : null);
+  $("#ev-proc").value = pr ? rotuloProc(pr) : (e && e.processo_numero ? e.processo_numero + " — " + (e.processo_apelido || "") : "");
+  $("#ev-resp").value = e ? (e.responsavel_id || "") : (pre.responsavel_id !== undefined ? (pre.responsavel_id || "") : (pr && pr.responsavel_id ? pr.responsavel_id : ""));
+  const lem = e ? e.lembretes : (pre.lembretes || [1, 0]);
+  document.querySelectorAll("#ev-lemb input").forEach(c => c.checked = lem.includes(Number(c.value)));
+  $("#ev-proc").dataset.tocado = ""; $("#ev-resp").dataset.tocado = e ? "1" : "";
+  const sit = $("#ev-situacao"); sit.classList.toggle("hide", !e || e.situacao === "aberto");
+  if (e && e.situacao !== "aberto") sit.innerHTML = `<b class="${e.situacao === "concluido" ? "ok" : "warn"}">${e.situacao === "concluido" ? "Concluído" : "Cancelado"}</b>${e.concluido_por ? " por " + esc(e.concluido_por) : ""}${e.concluido_em ? " em " + fmtUtc(e.concluido_em) : ""}${e.conclusao_obs ? " — " + esc(e.conclusao_obs) : ""}. Reabra para editar.`;
+  document.querySelectorAll("#d-evento input:not([type=hidden]), #d-evento select, #d-evento textarea").forEach(x => x.disabled = ro);
+  $("#ev-salvar").classList.toggle("hide", ro);
+  $("#ev-concluir").classList.toggle("hide", !e || e.situacao !== "aberto"); $("#ev-cancelar").classList.toggle("hide", !e || e.situacao !== "aberto");
+  $("#ev-reabrir").classList.toggle("hide", !e || e.situacao === "aberto");
+  $("#ev-excluir").classList.toggle("hide", !e || !(EU.perfil === "admin" || e.criado_por === EU.nome));
+  const lb = $("#ev-logbox"); lb.classList.toggle("hide", !e); lb.open = false;
+  $("#ev-log").innerHTML = e ? (e.log || []).map(l => `<div>${fmtUtc(l.quando)} — <b>${esc(l.por)}</b>: ${esc(l.acao)}${l.detalhe ? " (" + esc(l.detalhe) + ")" : ""}</div>`).join("") + `<div>Criado por ${esc(e.criado_por || "?")}.</div>` : "";
+  dEv.showModal(); if (!ro) $("#ev-titulo").focus();
+}
+$("#ev-proc").onchange = () => { const p = procPorRotulo($("#ev-proc").value); if (p && !$("#ev-resp").dataset.tocado && !$("#ev-id").value && p.responsavel_id) $("#ev-resp").value = p.responsavel_id; };
+$("#ev-resp").onchange = () => { $("#ev-resp").dataset.tocado = "1"; };
+$("#ev-fechar").onclick = () => dEv.close();
+async function aposEvento(msg) { dEv.close(); if (msg) aviso(msg); carregarCalendario(); carregarDashboard(); status(); }
+$("#ev-salvar").onclick = async () => {
+  const txt = $("#ev-proc").value.trim(), pr = procPorRotulo(txt);
+  if (txt && !pr) { aviso("Processo não encontrado na lista: escolha uma das opções sugeridas ou deixe o campo vazio."); return; }
+  const corpo = { titulo: $("#ev-titulo").value, tipo_id: Number($("#ev-tipo").value), data: $("#ev-data").value, hora: $("#ev-hora").value, local: $("#ev-local").value,
+    descricao: $("#ev-desc").value, processo_id: pr ? pr.id : null, responsavel_id: $("#ev-resp").value ? Number($("#ev-resp").value) : null, lembretes: lembMarcados() };
+  const id = $("#ev-id").value;
+  try {
+    if (id) { corpo.versao = Number($("#ev-versao").value); await api("/api/eventos/" + id, "POST", corpo); await aposEvento("Evento atualizado."); }
+    else { await api("/api/eventos", "POST", corpo); await aposEvento("Evento criado."); }
+  } catch (er) {
+    aviso(er.message);
+    if (id && /foi alterado por/.test(er.message) && await confirmar(er.message + "\n\nRecarregar a versão atual do evento? (O que você digitou será perdido.)", { titulo: "Evento alterado por outra pessoa", ok: "Recarregar" })) { dEv.close(); abrirEvento(Number(id)); }
+  }
+};
+async function mudarSit(sit, texto, ok, perigo) {
+  const id = $("#ev-id").value; let obs = "";
+  if (sit === "concluido") { obs = await perguntar("Observação da conclusão (opcional): por exemplo, 'peça protocolada em 25/11'.", "", { titulo: "Concluir evento", ok: "Concluir" }); if (obs === null) return; }
+  else if (!await confirmar(texto, { titulo: ok, ok, perigo })) return;
+  try { await api(`/api/eventos/${id}/situacao`, "POST", { situacao: sit, obs }); await aposEvento("Evento atualizado."); } catch (er) { aviso(er.message); }
+}
+$("#ev-concluir").onclick = () => mudarSit("concluido");
+$("#ev-reabrir").onclick = () => mudarSit("aberto", "Reabrir este evento? Ele volta a aparecer como em aberto.", "Reabrir", false);
+$("#ev-cancelar").onclick = () => mudarSit("cancelado", "Cancelar este evento? Ele sai da agenda e dos avisos, mas continua registrado (pode ser reaberto).", "Cancelar evento", true);
+$("#ev-excluir").onclick = async () => {
+  if (!await confirmar("Excluir DEFINITIVAMENTE este evento e o histórico dele? Não há como desfazer. Para apenas tirar da agenda, use \"Cancelar evento\".", { titulo: "Excluir evento", ok: "Excluir", perigo: true })) return;
+  try { await api("/api/eventos/" + $("#ev-id").value, "DELETE"); await aposEvento("Evento excluído."); } catch (er) { aviso(er.message); }
+};
+
+// tipos de evento (administrador)
+const dTp = $("#d-tipos");
+async function abrirTipos() { await prepararAgenda(); await desenharTipos(); dTp.showModal(); }
+async function desenharTipos() {
+  CAL.tipos = await api("/api/tipos-evento");
+  $("#tp-lista").innerHTML = CAL.tipos.map(t => `<div class="acoes" style="align-items:center;margin-bottom:6px" data-tp="${t.id}">
+    <input type="color" value="${t.cor}" data-c aria-label="Cor"><input value="${esc(t.nome)}" data-n maxlength="40" style="flex:1;min-width:120px" aria-label="Nome">
+    <label style="margin:0;font-weight:400"><input type="checkbox" data-a ${t.ativo ? "checked" : ""}> ativo</label>
+    <button class="b sm sec" type="button" data-s>Salvar</button>
+    <button class="b sm dg" type="button" data-x ${t.em_uso ? 'disabled title="Em uso por ' + t.em_uso + ' evento(s): desative em vez de excluir"' : ""}>Excluir</button>
+    <span class="mut">${t.em_uso} evento(s)</span></div>`).join("");
+  desenharTiposFiltro();
+}
+$("#tp-lista").onclick = async (e) => {
+  const b = e.target.closest("button"); if (!b) return; const li = b.closest("[data-tp]"), id = li.dataset.tp;
+  try {
+    if (b.dataset.s !== undefined) { await api("/api/tipos-evento/" + id, "POST", { nome: li.querySelector("[data-n]").value, cor: li.querySelector("[data-c]").value, ativo: li.querySelector("[data-a]").checked }); aviso("Tipo salvo."); await desenharTipos(); }
+    if (b.dataset.x !== undefined && await confirmar("Excluir este tipo de evento? Ele não é usado por nenhum evento.", { titulo: "Excluir tipo", ok: "Excluir", perigo: true })) { await api("/api/tipos-evento/" + id, "DELETE"); await desenharTipos(); }
+  } catch (er) { aviso(er.message); }
+};
+$("#tp-add").onclick = async () => { try { await api("/api/tipos-evento", "POST", { nome: $("#tp-novo").value, cor: $("#tp-cor").value }); $("#tp-novo").value = ""; await desenharTipos(); } catch (er) { aviso(er.message); } };
+$("#tp-fechar").onclick = () => { dTp.close(); carregarCalendario(); };
+$("#cal-tipos").onclick = abrirTipos;
+dTp.addEventListener("close", () => { CAL.pronto = false; });
+
+// cartão "Prazos e compromissos" no Início
+function desenharAgendaInicio(a) {
+  const el = $("#i-agenda"); if (!el) return;
+  const tot = (n, rot, cor) => `<div class="card clic ${n && cor ? "dest d-" + cor : ""}" data-cal="${rot}"><span class="mut">${rot === "v" ? "Vencidos" : rot === "h" ? "Hoje" : "Próximos 7 dias"}</span><b>${n}</b></div>`;
+  $("#i-ag-cards").innerHTML = tot(a.vencidos, "v", "warn") + tot(a.hoje, "h", "info") + tot(a.proximos7, "p", "");
+  const hoje = hojeIso();
+  $("#i-ag-lista").innerHTML = a.lista.length ? `<ul class="lst">${a.lista.map(x => `<li data-ag="${x.id}"><div class="t"><b class="${x.atrasado ? "err" : ""}">${esc(x.titulo)}</b><span class="${x.atrasado ? "err" : "mut"}">${dataBr(x.data)}${x.hora ? " " + x.hora : ""}${x.data === hoje ? " (hoje)" : ""}</span></div><div class="mut"><span class="tp-pt" style="--c:${x.tipo_cor}"></span>${esc(x.tipo_nome)}${x.processo_numero ? " · " + esc(x.processo_apelido || x.processo_numero) : ""}${x.responsavel_nome ? " · " + esc(x.responsavel_nome) : ""}</div></li>`).join("")}</ul>` : '<p class="mut">Nenhum compromisso em aberto. Use a aba Calendário para agendar.</p>';
+}
 
 // abas
 document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x === b));
   document.querySelectorAll("main > section").forEach(s => s.classList.toggle("hide", s.id !== "t-" + b.dataset.t));
   if (b.dataset.t === "inicio") carregarDashboard();
+  if (b.dataset.t === "calendario") carregarCalendario();
   if (b.dataset.t === "config") carregarConfig();
   if (b.dataset.t === "equipe") carregarEquipe();
   if (b.dataset.t === "sobre") carregarSobre();
@@ -697,7 +1011,7 @@ function renderLista() {
         <br><span class="mut">DJEN: ${DJE[p.dje_status] || "—"}${p.pub_total ? ` · ${p.pub_total} publ.${p.pub_ultima ? ", última em " + fmt(p.pub_ultima) : ""}` : ""}</span>${p.dje_status === "erro" && p.dje_mensagem ? `<br><span class="err" style="font-size:13px">${esc(p.dje_mensagem)}</span>` : ""}</td>
       <td><div class="acoes">
         <button class="b sm sec" data-ver="${p.id}">Movimentos</button>
-        ${p.ativo ? `<button class="b sm sec" data-resp="${p.id}">Responsável</button><button class="b sm sec" data-upd="${p.id}">Atualizar</button><button class="b sm sec" data-mon="${p.id}" data-m="${p.monitorar ? 0 : 1}">${p.monitorar ? "Parar de monitorar" : "Monitorar"}</button><button class="b sm sec" data-arq="${p.id}" data-a="0">Arquivar</button>`
+        ${p.ativo ? `<button class="b sm sec" data-ag="${p.id}">Agendar</button><button class="b sm sec" data-resp="${p.id}">Responsável</button><button class="b sm sec" data-upd="${p.id}">Atualizar</button><button class="b sm sec" data-mon="${p.id}" data-m="${p.monitorar ? 0 : 1}">${p.monitorar ? "Parar de monitorar" : "Monitorar"}</button><button class="b sm sec" data-arq="${p.id}" data-a="0">Arquivar</button>`
                   : `<button class="b sm sec" data-arq="${p.id}" data-a="1">Reativar</button>`}
         <button class="b sm dg" data-del="${p.id}">Remover</button></div></td></tr>`;
   }).join("");
@@ -777,10 +1091,11 @@ $("#lista").onclick = async (e) => {
       if (b.dataset.m === "1") await pedirMonitorar([Number(b.dataset.mon)]);
       else { await api("/api/processos/monitorar", "POST", { ids: [Number(b.dataset.mon)], monitorar: false }); aviso("Processo fora do monitoramento diário."); carregarLista(); }
     }
+    if (b.dataset.ag) { irPara("calendario"); await abrirEvento(null, { data: hojeIso(), processo_id: Number(b.dataset.ag) }); }
     if (b.dataset.resp) await pedirResponsavel([Number(b.dataset.resp)]);
     if (b.dataset.upd) { await api(`/api/processos/${b.dataset.upd}/consultar`, "POST", {}); aviso("Processo colocado na fila de consulta."); status(); }
     if (b.dataset.arq) { await api("/api/processos/ativo", "POST", { ids: [Number(b.dataset.arq)], ativo: b.dataset.a === "1" }); carregarLista(); }
-    if (b.dataset.del && await confirmar("Remover este processo e o histórico guardado? Esta ação não pode ser desfeita.", { titulo: "Remover processo", ok: "Remover", perigo: true })) { await api(`/api/processos/${b.dataset.del}`, "DELETE"); carregarLista(); }
+    if (b.dataset.del && await confirmar("Remover este processo e TUDO o que está ligado a ele: andamentos, publicações e eventos da agenda (prazos, audiências). Esta ação não pode ser desfeita. Para apenas tirá-lo da lista, use Arquivar.", { titulo: "Remover processo", ok: "Remover", perigo: true })) { await api(`/api/processos/${b.dataset.del}`, "DELETE"); carregarLista(); }
   } catch (err) { aviso(err.message); }
 };
 async function verMovimentos(id) {
@@ -807,6 +1122,7 @@ async function status() {
   try {
     const s = await api("/api/status");
     $("#c-ult").textContent = fmtUtc(s.ultima_consulta);
+    if (s.agenda) { const nc = $("#nav-cal"), q = s.agenda.vencidos + s.agenda.hoje; nc.textContent = s.agenda.vencidos ? s.agenda.vencidos + "!" : s.agenda.hoje; nc.classList.toggle("hide", !q); nc.title = `${s.agenda.vencidos} vencido(s), ${s.agenda.hoje} para hoje`; }
     const partes = [];
     if (s.rodando) partes.push(`Consultando… ${s.progresso || "iniciando"}${s.fila ? ` (+${s.fila} na fila)` : ""}`);
     if (s.dje_pausado_ate) partes.push("Limite do DJEN atingido: pausa até " + new Date(s.dje_pausado_ate * 1000).toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"}));

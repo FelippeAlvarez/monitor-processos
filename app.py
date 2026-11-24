@@ -24,6 +24,7 @@ from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
 import auth
+import agenda
 import prazos
 import backup
 import datajud
@@ -123,6 +124,7 @@ def r_status(h):
             "dje_pausado_ate": m.dje_pausado_ate if m.dje_pausado_ate > time.time() else None,
             "dje_ativo": CTX.config.dados.get("dje_ativo", True),
             "ultimo_ciclo": m.ultimo_ciclo, "proximo_ciclo": proximo,
+            "agenda": agenda.contagem(CTX.banco),
             "ultima_consulta": CTX.banco.ultima_consulta_geral(), "intervalo_horas": intervalo})
 
 
@@ -137,6 +139,7 @@ def r_dashboard(h):
         resp = ""
     cliente = (q.get("cliente") or [""])[0].strip()[:120]
     d = CTX.banco.dashboard(dias=dias, resp=resp or None, cliente=cliente or None)
+    d["agenda"] = agenda.resumo(CTX.banco, resp=resp or None, cliente=cliente or None)
     d["filtros_novas"] = sum(o["pub_novas"] for o in CTX.banco.oabs())
     d["filtros_ativos"] = len(CTX.banco.oabs_ativas())
     d["varredura"] = CTX.monitor.resumo_varredura()
@@ -144,6 +147,139 @@ def r_dashboard(h):
     d["rodando"] = CTX.monitor.rodando
     d["progresso"] = CTX.monitor.progresso
     h.json(d)
+
+
+# ---------------------------------------------------------------- agenda (v0.7.0)
+def _erro_agenda(h, e):
+    return h.json({"erro": str(e)}, 409 if isinstance(e, agenda.ConflitoVersao) else 400)
+
+
+def _lista(q, nome):
+    return [x for x in (q.get(nome) or [""])[0].split(",") if x.strip()]
+
+
+def _filtros_eventos(h):
+    q = parse_qs(urlparse(h.path).query)
+    g = lambda k: (q.get(k) or [""])[0].strip()  # noqa: E731
+    return dict(de=g("de") or None, ate=g("ate") or None, processo=int(g("processo")) if g("processo").isdigit() else None,
+                tipos=[int(x) for x in _lista(q, "tipo") if x.isdigit()],
+                resps=[x if x == "sem" else int(x) for x in _lista(q, "resp") if x == "sem" or x.isdigit()],
+                situacao=g("situacao") if g("situacao") in agenda.FILTRO_SIT else "ativos", q=g("q"))
+
+
+def r_tipos_evento(h):
+    h.json(agenda.tipos(CTX.banco))
+
+
+def r_tipo_evento_add(h):
+    c = h.corpo()
+    try:
+        tid = agenda.criar_tipo(CTX.banco, c.get("nome"), c.get("cor"))
+    except agenda.ErroAgenda as e:
+        return _erro_agenda(h, e)
+    h.auditar("tipo_evento_criado", f"#{tid} {c.get('nome')}")
+    h.json({"ok": True, "id": tid})
+
+
+def r_tipo_evento_edit(h, tid):
+    try:
+        agenda.editar_tipo(CTX.banco, int(tid), h.corpo())
+    except agenda.ErroAgenda as e:
+        return _erro_agenda(h, e)
+    h.auditar("tipo_evento_alterado", f"#{tid}")
+    h.json({"ok": True})
+
+
+def r_tipo_evento_del(h, tid):
+    try:
+        agenda.excluir_tipo(CTX.banco, int(tid))
+    except agenda.ErroAgenda as e:
+        return _erro_agenda(h, e)
+    h.auditar("tipo_evento_excluido", f"#{tid}")
+    h.json({"ok": True})
+
+
+def r_eventos(h):
+    try:
+        h.json(agenda.listar(CTX.banco, **_filtros_eventos(h)))
+    except agenda.ErroAgenda as e:
+        _erro_agenda(h, e)
+
+
+def r_eventos_ics(h):
+    try:
+        evs = agenda.listar(CTX.banco, **_filtros_eventos(h))
+    except agenda.ErroAgenda as e:
+        return _erro_agenda(h, e)
+    h.enviar(agenda.ics(evs), "text/calendar; charset=utf-8")
+
+
+def r_evento_get(h, eid):
+    e = agenda.obter(CTX.banco, int(eid))
+    h.json(e) if e else h.json({"erro": "Evento não encontrado."}, 404)
+
+
+def r_evento_add(h):
+    c = h.corpo()
+    try:
+        eid = agenda.criar(CTX.banco, c, h.usuario["nome"], CTX.auth)
+    except agenda.ErroAgenda as e:
+        return _erro_agenda(h, e)
+    h.auditar("evento_criado", f"#{eid} {str(c.get('titulo'))[:60]} em {c.get('data')}")
+    h.json({"ok": True, "id": eid})
+
+
+def r_evento_edit(h, eid):
+    c = h.corpo()
+    try:
+        v = agenda.editar(CTX.banco, int(eid), c, h.usuario["nome"], CTX.auth)
+    except agenda.ErroAgenda as e:
+        return _erro_agenda(h, e)
+    h.auditar("evento_alterado", f"#{eid}")
+    h.json({"ok": True, "versao": v})
+
+
+def r_evento_situacao(h, eid):
+    c = h.corpo()
+    try:
+        agenda.mudar_situacao(CTX.banco, int(eid), c.get("situacao"), h.usuario["nome"], c.get("obs"))
+    except agenda.ErroAgenda as e:
+        return _erro_agenda(h, e)
+    h.auditar("evento_situacao", f"#{eid} -> {c.get('situacao')}")
+    h.json({"ok": True})
+
+
+def r_evento_del(h, eid):
+    """Exclusão definitiva: só o administrador ou quem criou o evento. Para só tirar da agenda, use 'cancelar'."""
+    e = agenda.obter(CTX.banco, int(eid))
+    if not e:
+        return h.json({"erro": "Evento não encontrado."}, 404)
+    if h.usuario["perfil"] != "admin" and e["criado_por"] != h.usuario["nome"]:
+        return h.json({"erro": "Só o administrador ou quem criou o evento pode excluí-lo. Você pode cancelá-lo."}, 403)
+    agenda.excluir(CTX.banco, int(eid))
+    h.auditar("evento_excluido", f"#{eid} {e['titulo'][:60]} ({e['data']}, {e['tipo_nome']})")
+    h.json({"ok": True})
+
+
+def r_calendario_dias(h):
+    """Feriados nacionais/cadastrados e recesso no intervalo (para sombrear o calendário). No máximo 400 dias."""
+    q = parse_qs(urlparse(h.path).query)
+    try:
+        de = prazos.data_de_texto((q.get("de") or [""])[0])
+        ate = prazos.data_de_texto((q.get("ate") or [""])[0])
+    except prazos.ErroPrazo as e:
+        return h.json({"erro": str(e)}, 400)
+    if ate < de or (ate - de).days > 400:
+        return h.json({"erro": "Intervalo inválido."}, 400)
+    cfg = CTX.config.dados.get("prazos", {})
+    cal = prazos.Calendario(cfg.get("feriados_extras"), cfg.get("recesso"))
+    out, d = [], de
+    while d <= ate:
+        f, r = cal.feriado(d), cal.em_recesso(d)
+        if f or r:
+            out.append({"dia": d.isoformat(), "feriado": f or "", "recesso": r})
+        d += dt.timedelta(days=1)
+    h.json(out)
 
 
 def r_publicacoes(h):
@@ -717,6 +853,18 @@ ROTAS = [
     ("POST", r"/api/processos/(\d+)/consultar", r_consultar_um, "usu"),
     ("POST", r"/api/visto-todos", r_visto_todos, "usu"),
     ("GET", r"/api/dashboard", r_dashboard, "usu"),
+    ("GET", r"/api/tipos-evento", r_tipos_evento, "usu"),
+    ("POST", r"/api/tipos-evento", r_tipo_evento_add, "adm"),
+    ("POST", r"/api/tipos-evento/(\d+)", r_tipo_evento_edit, "adm"),
+    ("DELETE", r"/api/tipos-evento/(\d+)", r_tipo_evento_del, "adm"),
+    ("GET", r"/api/eventos", r_eventos, "usu"),
+    ("GET", r"/api/eventos\.ics", r_eventos_ics, "usu"),
+    ("POST", r"/api/eventos", r_evento_add, "usu"),
+    ("GET", r"/api/eventos/(\d+)", r_evento_get, "usu"),
+    ("POST", r"/api/eventos/(\d+)", r_evento_edit, "usu"),
+    ("POST", r"/api/eventos/(\d+)/situacao", r_evento_situacao, "usu"),
+    ("DELETE", r"/api/eventos/(\d+)", r_evento_del, "usu"),
+    ("GET", r"/api/calendario/dias", r_calendario_dias, "usu"),
     ("POST", r"/api/consultar", r_consultar_todos, "usu"),
     ("POST", r"/api/consultar-dje", r_consultar_dje, "usu"),
     ("GET", r"/api/log", r_log, "adm"),
