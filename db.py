@@ -7,6 +7,7 @@ import threading
 
 import agenda
 import historico
+import risco
 import agrupar
 
 SCHEMA = """
@@ -170,6 +171,7 @@ class Banco:
         self.conn.commit()
         agenda.migrar(self)
         historico.migrar(self)
+        risco.migrar(self)
 
     def _migrar(self):
         """v0.1.1: 'baseline_feito' registra se a 1ª consulta bem-sucedida já ocorreu.

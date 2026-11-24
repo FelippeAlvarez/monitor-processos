@@ -27,6 +27,7 @@ import auth
 import agenda
 import historico
 import lembretes
+import risco
 import prazos
 import backup
 import datajud
@@ -127,6 +128,7 @@ def r_status(h):
             "dje_ativo": CTX.config.dados.get("dje_ativo", True),
             "ultimo_ciclo": m.ultimo_ciclo, "proximo_ciclo": proximo,
             "agenda": agenda.contagem(CTX.banco),
+            "penhora": risco.contagem(CTX.banco, CTX.config.dados.get("prazos")),
             "ultima_consulta": CTX.banco.ultima_consulta_geral(), "intervalo_horas": intervalo})
 
 
@@ -142,6 +144,7 @@ def r_dashboard(h):
     cliente = (q.get("cliente") or [""])[0].strip()[:120]
     d = CTX.banco.dashboard(dias=dias, resp=resp or None, cliente=cliente or None)
     d["agenda"] = agenda.resumo(CTX.banco, resp=resp or None, cliente=cliente or None)
+    d["penhora"] = risco.resumo(CTX.banco, CTX.config.dados.get("prazos"))
     d["filtros_novas"] = sum(o["pub_novas"] for o in CTX.banco.oabs())
     d["filtros_ativos"] = len(CTX.banco.oabs_ativas())
     d["varredura"] = CTX.monitor.resumo_varredura()
@@ -219,6 +222,42 @@ def r_eventos_ics(h):
 def r_evento_get(h, eid):
     e = agenda.obter(CTX.banco, int(eid))
     h.json(e) if e else h.json({"erro": "Evento não encontrado."}, 404)
+
+
+# ---------------------------------------------------------------- risco de penhora (v0.6.5)
+def r_penhora(h):
+    q = parse_qs(urlparse(h.path).query)
+    pos = (q.get("posicao") or [""])[0]
+    itens = risco.listar(CTX.banco, CTX.config.dados.get("prazos"), pos if pos in ("executado", "exequente") else None, q=(q.get("q") or [""])[0])
+    h.json({"itens": itens, "resumo": risco.resumo(CTX.banco, CTX.config.dados.get("prazos")), "aviso": risco.AVISO})
+
+
+def r_penhora_proc(h, pid):
+    """Avaliação de um processo qualquer (marcado ou não); ?posicao=executado|exequente simula a posição sem gravar."""
+    p = CTX.banco.obter(int(pid))
+    if not p:
+        return h.json({"erro": "Processo não encontrado."}, 404)
+    pos = (parse_qs(urlparse(h.path).query).get("posicao") or [""])[0]
+    if pos in ("executado", "exequente"):
+        p["posicao"] = pos
+    cfg = CTX.config.dados.get("prazos") or {}
+    h.json(risco.avaliar(CTX.banco, p, prazos.Calendario(cfg.get("feriados_extras"), cfg.get("recesso"))))
+
+
+def r_posicao(h, pid):
+    pos = str(h.corpo().get("posicao") or "").strip()
+    try:
+        risco.definir_posicao(CTX.banco, int(pid), pos)
+    except ValueError as e:
+        return h.json({"erro": str(e)}, 400)
+    h.auditar("posicao_processo", f"processo {pid}: {pos or 'removido da análise de penhora'}")
+    h.json({"ok": True})
+
+
+def r_penhora_avisar(h):
+    r = risco.avisar(CTX.banco, CTX.config.dados, intervalo=0)
+    h.auditar("risco_penhora_aviso_manual", f"{r['enviados']} e-mail(s)")
+    h.json(r)
 
 
 def r_agenda_enviar(h):
@@ -937,6 +976,10 @@ ROTAS = [
     ("DELETE", r"/api/eventos/(\d+)", r_evento_del, "usu"),
     ("GET", r"/api/calendario/dias", r_calendario_dias, "usu"),
     ("POST", r"/api/agenda/enviar-resumo", r_agenda_enviar, "adm"),
+    ("GET", r"/api/penhora", r_penhora, "usu"),
+    ("GET", r"/api/processos/(\d+)/penhora", r_penhora_proc, "usu"),
+    ("POST", r"/api/processos/(\d+)/posicao", r_posicao, "usu"),
+    ("POST", r"/api/penhora/avisar", r_penhora_avisar, "adm"),
     ("GET", r"/api/processos/(\d+)/historico", r_historico, "usu"),
     ("POST", r"/api/processos/(\d+)/anotacoes", r_anotacao_add, "usu"),
     ("POST", r"/api/anotacoes/(\d+)", r_anotacao_edit, "usu"),
@@ -1117,6 +1160,10 @@ def agendador():
             lembretes.enviar_resumos(CTX.banco, CTX.config.dados)
         except Exception as e:  # noqa: BLE001
             logging.getLogger("monitor").exception("Falha no resumo da agenda: %r", e)
+        try:
+            risco.avisar(CTX.banco, CTX.config.dados)
+        except Exception as e:  # noqa: BLE001
+            logging.getLogger("monitor").exception("Falha no aviso de risco de penhora: %r", e)
         if CTX.trava:
             CTX.trava.batimento()
         voltas += 1

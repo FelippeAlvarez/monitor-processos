@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.2)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.3)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -348,3 +348,17 @@ Resumo diário da agenda por e-mail
 - Computador desligado: o programa só envia com o computador ligado e o Monitor aberto. Ao ligar, o aviso atrasado sai de uma vez, num único e-mail. Por isso, para prazo fatal, use também o "Exportar .ics" (os alarmes dos lembretes vão junto no arquivo) e, quando o programa estiver na VPS, o envio passa a ser contínuo.
 - Se o envio falhar (sem internet, senha errada), o programa tenta de novo depois de 30 minutos; o botão "Enviar o resumo agora (teste)" tenta imediatamente. Falhas ficam no log.
 - Ferramenta de apoio: não substitui a conferência nos autos, nos portais dos tribunais e na intimação oficial.
+
+31. RISCO DE PENHORA (v0.7.3)
+Para que serve: avisar a equipe, com antecedência, que um processo de execução ou de cumprimento de sentença caminha para penhora (inclusive de dinheiro em conta), para orientar o cliente e abrir negociação (acordo, parcelamento) antes do bloqueio. Não serve — e o programa não orienta — para movimentar ou alienar bens a fim de frustrar a execução: isso pode ser fraude à execução (CPC, art. 792).
+Como usar
+- Aba "Risco de penhora" > "Incluir processo na análise": escolha o processo e informe se o NOSSO CLIENTE é executado (devedor) ou exequente (credor). Só processos marcados são avaliados. "Remover da análise" desfaz a marcação (não apaga nada do processo).
+- Para cliente EXECUTADO, o grau é: sem sinais; baixo (execução em curso, sem sinal de citação ou penhora); médio (ordem de pagamento ou citação do executado — prazo em curso); alto (pedido de penhora do exequente ou prazo de pagamento aparentemente vencido); crítico (penhora ou bloqueio determinados ou efetivados). Acordo/suspensão, desbloqueio e extinção por pagamento reduzem o grau.
+- Para cliente EXEQUENTE, o programa mostra a situação do crédito e, quando o prazo de pagamento do executado aparenta ter vencido sem sinal de pedido de penhora, a "oportunidade" de avaliar o requerimento.
+- Prazo de pagamento (aproximado): 15 dias úteis no cumprimento de sentença (CPC, art. 523) e 3 dias úteis na execução de título extrajudicial (CPC, art. 829), contados do último sinal de citação/intimação, com os feriados e o recesso das Configurações. É estimativa: a data certa depende da forma da intimação/citação; confira nos autos.
+- Cada cartão traz o rótulo, as sugestões, os "sinais encontrados" (data, fonte e trecho do texto) e os botões Histórico e Agendar (cria um compromisso de negociação/avaliação já ligado ao processo). "Agrupar por cliente" reúne os processos do mesmo cliente.
+- Início: cartão "Risco de penhora" (críticos, altos, médios e oportunidades). O selo da aba soma críticos, altos e oportunidades.
+- Avisos por e-mail (mesmo servidor de e-mail das Configurações): o responsável pelo processo e os destinatários gerais recebem um e-mail quando o grau SOBE para alto ou crítico (cliente executado) ou surge uma oportunidade (cliente exequente). Não repete o mesmo grau; se o grau cair e subir de novo, avisa de novo. O envio só ocorre com o computador ligado e o Monitor aberto. O administrador pode usar "Enviar avisos agora".
+Limites (leia): a leitura é por palavras-chave nos andamentos do DataJud e nas publicações do DJEN já guardados. Pode errar para mais ou para menos, e não vê o que não foi publicado (por exemplo, citação por oficial de justiça sem andamento). O programa não consulta contas, SISBAJUD nem qualquer sistema de bloqueio. Não substitui a conferência nos autos.
+Consulta por CPF/CNPJ: não há (nesta versão) monitor separado por documento; use o campo "Cliente" dos processos ("Agrupar por cliente") e os filtros por CPF/CNPJ da aba Filtros para descobrir processos novos.
+Base legal conferida no texto compilado do Planalto (arquivo de 10/10/2026): CPC arts. 523, 829, 854 e 792.

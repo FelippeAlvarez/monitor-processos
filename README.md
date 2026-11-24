@@ -7,6 +7,7 @@ Programa local (Windows/Linux/macOS, Python 3.9+, apenas biblioteca padrão) que
 - **Filtros de pesquisa no DJEN**: OAB, CPF/CNPJ ou trecho de texto, para detectar publicações novas em processos ainda não cadastrados.
 - Painel em `http://127.0.0.1:8765`, alertas por e-mail opcionais, dados somente na máquina/servidor do escritório.
 - **Página inicial (v0.6.3)**: aba "Início" com cartões, gráfico dos últimos 14 dias, publicações por situação, tribunais, equipe e listas do que é novo (MANUAL, seção 27).
+- **Risco de penhora (v0.7.3)**: aba "Risco de penhora" (grau baixo/médio/alto/crítico para cliente executado; oportunidade para credor), prazo de pagamento aproximado e avisos por e-mail (MANUAL, seção 31).
 - **Prazos e lembretes (v0.7.2)**: "Agendar este prazo" a partir do cálculo (data como sugestão, com memória de cálculo guardada), resumo diário da agenda por e-mail e alarmes no .ics (MANUAL, seção 30).
 - **Histórico do processo (v0.7.1)**: aba "Histórico" com linha do tempo única (andamentos, publicações, agenda e anotações), filtros e paginação (MANUAL, seção 29).
 - **Agenda e Calendário (v0.7.0)**: aba "Calendário" com visões Mês/Lista, eventos editáveis, tipos configuráveis, filtros, exportação .ics e cartão no Início (MANUAL, seção 28).

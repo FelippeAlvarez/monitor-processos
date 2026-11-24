@@ -143,6 +143,16 @@
   .tl .src { font-size:12px; font-weight:600; letter-spacing:.02em; text-transform:uppercase; }
   .tl-mes { margin:16px 0 6px -8px; font-weight:600; color:var(--mut); }
   .hc { display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  /* risco de penhora */
+  .rk { display:inline-block; padding:1px 9px; border-radius:99px; font-size:12px; font-weight:600; border:1px solid currentColor; }
+  .rk.critico { color:var(--err); background:color-mix(in srgb,var(--err) 14%,transparent); }
+  .rk.alto { color:var(--warn); background:color-mix(in srgb,var(--warn) 16%,transparent); }
+  .rk.medio { color:var(--gold); }
+  .rk.baixo, .rk.acompanhar { color:var(--mut); }
+  .rk.oportunidade { color:var(--ok); background:color-mix(in srgb,var(--ok) 12%,transparent); }
+  .pn { border:1px solid var(--bd); border-left:5px solid var(--mut); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:var(--card); }
+  .pn.critico { border-left-color:var(--err); } .pn.alto { border-left-color:var(--warn); } .pn.medio { border-left-color:var(--gold); } .pn.oportunidade { border-left-color:var(--ok); }
+  .pn ul { margin:6px 0 0 18px; padding:0; } .pn li { margin:3px 0; font-size:13.5px; }
   dialog::backdrop { background:rgba(10,15,25,.55); }
   #d-conf p { white-space:pre-wrap; margin:0 0 12px; }
   #msg { position:fixed; bottom:16px; right:16px; background:var(--tx); color:var(--bg); padding:10px 14px; border-radius:10px; max-width:380px; display:none; box-shadow:0 8px 24px rgba(10,15,35,.3); }
@@ -282,6 +292,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   <button data-t="painel">Processos</button>
   <button data-t="historico">Histórico</button>
   <button data-t="calendario">Calendário <span class="badge hide" id="nav-cal"></span></button>
+  <button data-t="penhora">Risco de penhora <span class="badge hide" id="nav-pen"></span></button>
   <button data-t="publicacoes">Publicações <span class="badge hide" id="nav-pub"></span></button>
   <button data-t="oab">Filtros <span class="badge hide" id="nav-oab"></span></button>
   <button data-t="adicionar">Adicionar</button>
@@ -300,6 +311,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   </div>
   <div class="cards" id="i-cards"></div>
   <div class="card" id="i-estado"></div>
+  <div class="card hide" id="i-penhora"><div class="acoes" style="justify-content:space-between;align-items:center"><b>Risco de penhora</b><button class="b sec sm" type="button" data-ir="penhora">Abrir</button></div><div class="cards" id="i-pen-cards" style="margin-top:8px"></div><div id="i-pen-lista"></div></div>
   <div class="card" id="i-agenda"><div class="acoes" style="justify-content:space-between;align-items:center"><b>Prazos e compromissos</b><button class="b sec sm" type="button" data-ir="calendario">Abrir calendário</button></div><div class="cards" id="i-ag-cards" style="margin-top:8px"></div><div id="i-ag-lista"></div></div>
   <div class="grid2 gi">
     <div class="card"><b id="i-serie-tit">Últimos 14 dias</b> <span class="mut" id="i-serie-leg"></span><div id="i-serie"></div></div>
@@ -336,6 +348,25 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <div class="acoes" style="margin-top:6px"><button class="b sec" id="h-mais" type="button">Carregar mais antigos</button></div>
   </div>
   <p class="mut" style="font-size:12.5px">Andamentos vêm do DataJud (com defasagem) e publicações do DJEN; publicações idênticas aparecem uma vez. Esta tela só mostra o que o programa já guardou — nada é consultado ao CNJ ao abrir. As datas e prazos agendados são os informados pela equipe.</p>
+</section>
+<section id="t-penhora" class="hide">
+  <div class="aviso" style="margin-bottom:10px"><b>Ferramenta de apoio, leitura aproximada.</b> O programa procura palavras-chave nos andamentos e publicações guardados e pode errar para mais ou para menos: confira sempre nos autos. A finalidade é <b>orientar o cliente e negociar acordo</b> antes de um bloqueio; não é para orientar movimentação de bens (alienar ou onerar bens depois da citação pode ser fraude à execução — CPC, art. 792).</div>
+  <div class="card">
+    <b>Incluir processo na análise</b>
+    <div class="cal-bar" style="margin-top:6px">
+      <div style="flex:1;min-width:240px"><label for="pn-proc">Processo</label><input id="pn-proc" list="dl-proc" style="width:100%" placeholder="número, apelido ou cliente" autocomplete="off"></div>
+      <div><label for="pn-pos">Nosso cliente é</label><select id="pn-pos"><option value="executado">Executado (devedor)</option><option value="exequente">Exequente (credor)</option></select></div>
+      <button class="b" id="pn-add" type="button">Incluir / alterar</button>
+    </div>
+  </div>
+  <div class="cal-bar" style="margin-top:10px">
+    <div><label for="pn-f-pos">Mostrar</label><select id="pn-f-pos"><option value="">Todos</option><option value="executado">Cliente executado</option><option value="exequente">Cliente exequente</option></select></div>
+    <div style="flex:1;min-width:180px"><label for="pn-q">Texto</label><input id="pn-q" style="width:100%" placeholder="número, apelido ou cliente" autocomplete="off"></div>
+    <div><label style="margin-top:22px"><input type="checkbox" id="pn-grupo" style="width:auto"> Agrupar por cliente</label></div>
+    <button class="b sec so-adm" id="pn-avisar" type="button" title="Verifica agora e envia por e-mail os avisos devidos">Enviar avisos agora</button>
+  </div>
+  <div id="pn-resumo" class="hc" style="margin-bottom:8px"></div>
+  <div id="pn-lista"></div>
 </section>
 <section id="t-calendario" class="hide">
   <div class="cal-bar">
@@ -752,6 +783,7 @@ async function carregarDashboard() {
   $("#i-estado").innerHTML = `<span class="mut">Última consulta:</span> ${fmtUtc(d.ultima_consulta)} · ${vr}` + (d.rodando ? ` · <b>consultando… ${esc(d.progresso || "")}</b>` : "") +
     ` <span class="mut">· A varredura só roda com o computador ligado e o programa aberto.</span>`;
   if (d.agenda) desenharAgendaInicio(d.agenda);
+  if (d.penhora) desenharPenhoraInicio(d.penhora);
   $("#i-serie").innerHTML = serieSvg(d.serie); $("#i-serie-tit").textContent = `Últimos ${d.serie.length} dias`;
   const filtrado = !!(d.filtro.resp || d.filtro.cliente);
   $("#i-f-limpar").classList.toggle("hide", !filtrado && d.filtro.dias === 14);
@@ -774,6 +806,7 @@ $("#t-inicio").onclick = (e) => {
   const c = e.target.closest("[data-ir]"); if (c) { e.preventDefault(); irPara(c.dataset.ir, c.dataset.f); return; }
   const m = e.target.closest("[data-mov]"); if (m) { abrirHistorico(Number(m.dataset.mov)); return; }
   const ag = e.target.closest("[data-ag]"); if (ag) { irPara("calendario"); abrirEvento(Number(ag.dataset.ag)); return; }
+  if (e.target.closest("[data-pen]")) { irPara("penhora"); return; }
   const cl = e.target.closest("[data-cal]"); if (cl) { irPara("calendario"); return; }
   if (e.target.closest("[data-pub]")) irPara("publicacoes");
 };
@@ -1068,6 +1101,54 @@ $("#h-fontes").onchange = (e) => { e.target.checked ? HIST.fontes.add(e.target.v
 let histT; $("#h-q").oninput = () => { clearTimeout(histT); histT = setTimeout(() => carregarHistorico(), 350); };
 $("#h-limpar").onclick = () => { ["#h-de", "#h-ate", "#h-q"].forEach(i => $(i).value = ""); HIST.fontes = new Set(["andamento", "publicacao", "evento", "anotacao"]); carregarHistorico(); };
 
+// ---- Risco de penhora (v0.6.5)
+const GRAU_ROT = { critico: "crítico", alto: "alto", medio: "médio", baixo: "baixo", oportunidade: "oportunidade", acompanhar: "acompanhar", "": "sem sinais" };
+let PEN = [];
+async function carregarPenhora() {
+  atualizarDatalist();
+  const p = new URLSearchParams(); if ($("#pn-f-pos").value) p.set("posicao", $("#pn-f-pos").value); if ($("#pn-q").value.trim()) p.set("q", $("#pn-q").value.trim());
+  let d; try { d = await api("/api/penhora?" + p); } catch (e) { aviso(e.message); return; }
+  PEN = d.itens; const r = d.resumo, ex = r.executado;
+  $("#pn-resumo").innerHTML = [["critico", ex.critico], ["alto", ex.alto], ["medio", ex.medio], ["baixo", ex.baixo]].map(([g, n]) => `<span class="rk ${g}">${GRAU_ROT[g]}: ${n}</span>`).join("") + `<span class="rk oportunidade">oportunidades (credor): ${r.oportunidades}</span><span class="mut">${r.n_executado} como executado · ${r.n_exequente} como exequente</span>`;
+  desenharPenhora();
+}
+function cartaoPenhora(x) {
+  const nome = esc(x.apelido || x.cliente || x.numero), pos = x.posicao === "executado" ? "cliente EXECUTADO" : "cliente EXEQUENTE";
+  const pz = x.prazo ? `<div class="mut">Prazo de pagamento (aprox.): <b>${dataBr(x.prazo.vencimento)}</b> — ${esc(x.prazo.base)} (${esc(x.prazo.artigo)})</div>` : "";
+  const sg = x.sinais.filter(s => s.data).map(s => `<li><b>${dataBr(s.data)}</b> · ${esc(s.nome)} <span class="mut">(${s.fonte === "publicacao" ? "DJEN" : "DataJud"})</span><br><span class="mut">${esc(s.trecho)}</span></li>`).join("");
+  return `<div class="pn ${x.grau}" data-pn="${x.processo_id}"><div class="acoes" style="justify-content:space-between;align-items:center"><div><span class="rk ${x.grau}">${GRAU_ROT[x.grau] || x.grau}</span> <b>${nome}</b> <span class="mut">· ${pos}${x.cliente && x.apelido ? " · " + esc(x.cliente) : ""}</span><br><span class="mut" style="font-family:monospace">${esc(x.numero)}</span></div>
+    <div class="acoes"><button class="b sm sec" data-pn-h type="button">Histórico</button><button class="b sm sec" data-pn-ag type="button">Agendar</button><button class="b sm sec" data-pn-x type="button">Remover da análise</button></div></div>
+    <div style="margin-top:4px">${esc(x.rotulo)}</div>${pz}
+    ${x.sugestoes.length ? `<ul>${x.sugestoes.map(s => `<li>${esc(s)}</li>`).join("")}</ul>` : ""}
+    ${sg ? `<details style="margin-top:6px"><summary class="mut">Sinais encontrados (${x.n_sinais})</summary><ul>${sg}</ul></details>` : ""}</div>`;
+}
+function desenharPenhora() {
+  if (!PEN.length) { $("#pn-lista").innerHTML = '<p class="mut">Nenhum processo na análise. Inclua acima, informando se o nosso cliente é executado ou exequente.</p>'; return; }
+  if (!$("#pn-grupo").checked) { $("#pn-lista").innerHTML = PEN.map(cartaoPenhora).join(""); return; }
+  const g = {}; PEN.forEach(x => (g[x.cliente || "(sem cliente informado)"] = g[x.cliente || "(sem cliente informado)"] || []).push(x));
+  $("#pn-lista").innerHTML = Object.entries(g).map(([c, xs]) => `<h3 style="margin:14px 0 6px">${esc(c)} <span class="mut" style="font-size:13px;font-weight:400">— ${xs.length} processo(s); pior grau: ${GRAU_ROT[xs[0].grau] || xs[0].grau}</span></h3>` + xs.map(cartaoPenhora).join("")).join("");
+}
+$("#pn-lista").onclick = async (e) => {
+  const b = e.target.closest("button"); if (!b) return; const id = Number(b.closest("[data-pn]").dataset.pn), x = PEN.find(y => y.processo_id === id);
+  if (b.dataset.pnH !== undefined) { abrirHistorico(id); return; }
+  if (b.dataset.pnAg !== undefined) { await prepararAgenda(); const tp = CAL.tipos.find(t => /diligência|tarefa/i.test(t.nome) && t.ativo) || CAL.tipos.find(t => t.ativo); irPara("calendario");
+    abrirEvento(null, { processo_id: id, tipo_id: tp ? tp.id : undefined, titulo: (x.posicao === "executado" ? "Negociar acordo / orientar cliente — " : "Avaliar pedido de penhora — ") + (x.apelido || x.cliente || x.numero).slice(0, 60), descricao: x.rotulo + (x.prazo ? `\nPrazo de pagamento (aprox.): ${dataBr(x.prazo.vencimento)}` : "") + "\n" + x.sugestoes.join("\n"), lembretes: [3, 1, 0] }); return; }
+  if (b.dataset.pnX !== undefined && await confirmar("Tirar este processo da análise de risco de penhora? (Nada é apagado do processo.)", { titulo: "Remover da análise", ok: "Remover" })) {
+    try { await api(`/api/processos/${id}/posicao`, "POST", { posicao: "" }); carregarPenhora(); status(); } catch (er) { aviso(er.message); } }
+};
+$("#pn-add").onclick = async () => {
+  const p = procPorRotulo($("#pn-proc").value); if (!p) { aviso("Escolha o processo na lista de sugestões."); return; }
+  try { await api(`/api/processos/${p.id}/posicao`, "POST", { posicao: $("#pn-pos").value }); $("#pn-proc").value = ""; aviso("Processo incluído na análise."); carregarPenhora(); status(); } catch (er) { aviso(er.message); }
+};
+["#pn-f-pos", "#pn-grupo"].forEach(i => $(i).onchange = () => i === "#pn-grupo" ? desenharPenhora() : carregarPenhora());
+let penT; $("#pn-q").oninput = () => { clearTimeout(penT); penT = setTimeout(carregarPenhora, 350); };
+$("#pn-avisar").onclick = async () => { try { const r = await api("/api/penhora/avisar", "POST", {}); aviso(r.enviados ? `${r.enviados} aviso(s) enviado(s).` : "Nenhum aviso devido agora (" + r.motivo + ")."); } catch (e) { aviso(e.message); } };
+function desenharPenhoraInicio(p) {
+  const el = $("#i-penhora"); if (!el) return; el.classList.toggle("hide", !(p.n_executado + p.n_exequente));
+  $("#i-pen-cards").innerHTML = `<div class="card clic ${p.executado.critico ? "dest d-err" : ""}" data-pen="1"><span class="mut">Crítico</span><b>${p.executado.critico}</b></div><div class="card clic ${p.executado.alto ? "dest d-warn" : ""}" data-pen="1"><span class="mut">Alto</span><b>${p.executado.alto}</b></div><div class="card clic" data-pen="1"><span class="mut">Médio</span><b>${p.executado.medio}</b></div><div class="card clic ${p.oportunidades ? "dest d-ok" : ""}" data-pen="1"><span class="mut">Oportunidades (credor)</span><b>${p.oportunidades}</b></div>`;
+  $("#i-pen-lista").innerHTML = p.lista.length ? `<ul class="lst">${p.lista.map(x => `<li data-pen="1"><div class="t"><b>${esc(x.apelido || x.cliente || x.numero)}</b><span class="rk ${x.grau}">${GRAU_ROT[x.grau]}</span></div><div class="mut">${esc(x.rotulo)}</div></li>`).join("")}</ul>` : "";
+}
+
 // abas
 document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x === b));
@@ -1075,6 +1156,7 @@ document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
   if (b.dataset.t === "inicio") carregarDashboard();
   if (b.dataset.t === "calendario") carregarCalendario();
   if (b.dataset.t === "historico") carregarHistorico();
+  if (b.dataset.t === "penhora") carregarPenhora();
   if (b.dataset.t === "config") carregarConfig();
   if (b.dataset.t === "equipe") carregarEquipe();
   if (b.dataset.t === "sobre") carregarSobre();
@@ -1253,6 +1335,7 @@ async function status() {
   try {
     const s = await api("/api/status");
     $("#c-ult").textContent = fmtUtc(s.ultima_consulta);
+    if (s.penhora) { const np = $("#nav-pen"), q = s.penhora.graves + s.penhora.oportunidades; np.textContent = q; np.classList.toggle("hide", !q); np.title = `${s.penhora.graves} crítico(s)/alto(s), ${s.penhora.oportunidades} oportunidade(s)`; }
     if (s.agenda) { const nc = $("#nav-cal"), q = s.agenda.vencidos + s.agenda.hoje; nc.textContent = s.agenda.vencidos ? s.agenda.vencidos + "!" : s.agenda.hoje; nc.classList.toggle("hide", !q); nc.title = `${s.agenda.vencidos} vencido(s), ${s.agenda.hoje} para hoje`; }
     const partes = [];
     if (s.rodando) partes.push(`Consultando… ${s.progresso || "iniciando"}${s.fila ? ` (+${s.fila} na fila)` : ""}`);
