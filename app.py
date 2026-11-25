@@ -401,6 +401,43 @@ def r_publicacoes(h):
     h.json(partes.enriquecer_publicacoes(CTX.banco, CTX.banco.publicacoes(pid, so_novas=q.get("novas", ["0"])[0] == "1", situacao=sit or None)))
 
 
+_PESQ_LOCK = threading.Lock()
+
+
+def r_dje_pesquisar(h):
+    """v0.7.5: pesquisa avulsa no DJEN (OAB, número do processo, nome da parte, texto e período). Não grava nada."""
+    c = h.corpo()
+    try:
+        f = dje.validar_pesquisa(c.get("oab"), c.get("uf"), c.get("numero"), c.get("nome"), c.get("texto"), c.get("tribunal"),
+                                 c.get("inicio"), c.get("fim"))
+    except dje.ErroPesquisa as e:
+        return h.json({"erro": str(e)}, 400)
+    if not _PESQ_LOCK.acquire(blocking=False):
+        return h.json({"erro": "Outra pesquisa no DJEN está em andamento. Aguarde terminar e tente de novo."}, 409)
+    try:
+        base = CTX.config.dados.get("dje_base_url") or dje.BASE_URL
+        try:
+            res = dje.pesquisar(f, base_url=base)
+        except dje.ErroAPI as e:
+            return h.json({"erro": str(e)}, 502)
+    finally:
+        _PESQ_LOCK.release()
+    cad = {p["numero_limpo"]: p["id"] for p in CTX.banco.listar_basico()}
+    for it in res["itens"]:
+        it["processo_id"] = cad.get(it["numero"])
+        it["numero_fmt"] = dje.formatar_cnj(it["numero"]) if len(it["numero"]) == 20 else it["numero"]
+    res["filtros"] = f
+    res["processos"] = len({i["numero"] for i in res["itens"]})
+    filtros_txt = []
+    if f["oab"]:
+        filtros_txt.append("OAB=%s/%s" % (f["oab"], f["uf"]))
+    for rot, chave in (("processo", "numero"), ("parte", "nome"), ("texto", "texto"), ("tribunal", "tribunal")):
+        if f[chave]:
+            filtros_txt.append("%s=%s" % (rot, f[chave]))
+    h.auditar("dje_pesquisa", "%s: %s | %s a %s | %d resultado(s)" % (h.usuario["nome"], "; ".join(filtros_txt), f["inicio"], f["fim"], len(res["itens"])))
+    h.json(res)
+
+
 def r_diag_dje(h):
     """Diagnóstico (admin): mostra o JSON bruto do DJEN de um processo, para comparar com o que o programa guarda."""
     q = parse_qs(urlparse(h.path).query)
@@ -970,6 +1007,7 @@ ROTAS = [
     ("POST", r"/api/aparencia", r_aparencia, "usu"),
     ("GET", r"/api/status", r_status, "usu"),
     ("GET", r"/api/publicacoes", r_publicacoes, "usu"),
+    ("POST", r"/api/dje/pesquisar", r_dje_pesquisar, "usu"),
     ("POST", r"/api/publicacoes/visto", r_pub_visto, "usu"),
     ("POST", r"/api/publicacoes/situacao", r_pub_situacao, "usu"),
     ("POST", r"/api/processos/responsavel", r_responsavel, "usu"),

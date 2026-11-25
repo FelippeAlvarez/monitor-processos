@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.4)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.5)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -380,3 +380,17 @@ Janela própria
 - Configurações > "Janela do programa" desliga a opção (vale na próxima vez que o Monitor for iniciado).
 - Fechar a janela NÃO encerra o Monitor (ele continua na janela preta, fazendo as consultas). Para encerrar, feche a janela preta.
 - Para abrir de novo sem reiniciar: no navegador, endereço http://127.0.0.1:8765.
+
+
+33. PESQUISA NO DJEN (v0.7.5)
+
+Onde: aba Publicações > "Pesquisar no DJEN".
+Filtros (use um ou combine): OAB + UF, número do processo (20 dígitos, com ou sem máscara), nome da parte e sigla do tribunal (ex.: TJRJ).
+Período: "Só hoje" (padrão), "Últimos N dias" ou "Data inicial/final". Máximo de 366 dias; datas futuras são limitadas a hoje.
+O que faz: consulta o DJEN ao vivo e mostra o resultado. NÃO grava nada no banco. Para cada processo encontrado há os botões "Cadastrar no monitor", "Histórico" (se já cadastrado) e "Abrir no tribunal".
+Limites e cuidados:
+- Cada resultado é conferido localmente contra os filtros; se a fonte ignorar um filtro, o item é descartado (o contador "descartados" aparece).
+- A busca por nome da parte usa o parâmetro nomeParte do DJEN, cujo funcionamento não pôde ser verificado na construção. Se o DJEN recusá-lo, o programa refaz a busca como texto e avisa ("modo: nome no texto"), o que pode ser menos completo.
+- A pesquisa para após ~150 segundos ou 20 páginas e avisa que o resultado foi truncado: reduza o período.
+- Só uma pesquisa por vez.
+- O DJEN só traz o que foi publicado: partes que nunca constaram em publicação não são encontradas.

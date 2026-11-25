@@ -478,6 +478,27 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     só as publicações dos últimos 15 dias contam como novas. A <b>situação</b> (nova, em análise, tratada) é compartilhada por toda a equipe: mostra quem mudou e quando.
     Cópias idênticas da mesma publicação (comum na Justiça do Trabalho) aparecem <b>uma vez só</b>, com o número de cópias. Apoio à conferência: <b>a contagem de prazo é responsabilidade do advogado</b>, com base na publicação oficial.</p>
   </div>
+  <details class="card" id="pq-card">
+    <summary><b>Pesquisar no DJEN</b> <span class="mut">— pesquisa avulsa por OAB, número do processo, nome da parte e período (não grava nada)</span></summary>
+    <div class="grid2" style="margin-top:8px">
+      <div><label for="pq-oabsel">OAB</label>
+        <div class="acoes" style="flex-wrap:nowrap"><select id="pq-oabsel" style="flex:1;min-width:0;padding:8px" aria-label="OABs cadastradas"></select></div></div>
+      <div></div>
+      <div><label for="pq-oab">Número da OAB</label><input id="pq-oab" style="width:100%" placeholder="só dígitos (ex.: 125449)" inputmode="numeric"></div>
+      <div><label for="pq-uf">UF da OAB</label><select id="pq-uf" style="width:100%;padding:8px"></select></div>
+      <div><label for="pq-num">Número do processo</label><input id="pq-num" style="width:100%" placeholder="0000000-00.0000.0.00.0000" autocomplete="off"></div>
+      <div><label for="pq-trib">Tribunal (opcional)</label><input id="pq-trib" style="width:100%" placeholder="ex.: TJRJ, TRT1" maxlength="10"></div>
+      <div style="grid-column:1/-1"><label for="pq-nome">Nome da parte</label><input id="pq-nome" style="width:100%" placeholder="nome ou parte do nome (mín. 3 letras)" autocomplete="off"></div>
+      <div><label for="pq-per">Período (data de disponibilização)</label>
+        <select id="pq-per" style="width:100%;padding:8px"><option value="hoje">Hoje</option><option value="dias">Últimos N dias</option><option value="intervalo">Data inicial e final</option></select></div>
+      <div id="pq-dias-box" class="hide"><label for="pq-dias">N (dias para trás, contando hoje)</label><input id="pq-dias" type="number" min="1" max="366" value="7" style="width:100%"></div>
+      <div id="pq-ini-box" class="hide"><label for="pq-ini">Data inicial</label><input id="pq-ini" type="date" style="width:100%"></div>
+      <div id="pq-fim-box" class="hide"><label for="pq-fim">Data final</label><input id="pq-fim" type="date" style="width:100%"></div>
+    </div>
+    <p class="mut">Os filtros preenchidos valem <b>juntos</b> (E). Informe ao menos um entre OAB, número do processo e nome da parte. Período máximo de 366 dias; consultas muito amplas podem ser cortadas (o programa avisa). O resultado vem direto do DJEN e <b>não é guardado</b>: para acompanhar um processo, use “Cadastrar no monitor”. A busca por nome traz só o que o DJEN publicou com aquele nome. A pesquisa fica registrada no log de auditoria (quem, filtros e período).</p>
+    <div class="acoes"><button class="b" id="pq-ir" type="button">Pesquisar</button><button class="b sec" id="pq-limpar" type="button">Limpar</button><span class="mut" id="pq-st" style="align-self:center"></span></div>
+    <div id="pq-res" style="margin-top:10px"></div>
+  </details>
   <div id="p-lista"></div>
 </section>
 
@@ -1519,6 +1540,85 @@ $("#p-lista").onchange = async (e) => {
   try { await api("/api/publicacoes/situacao", "POST", { processo_id: b.processo_id, grupo: b.grupo, situacao: sel.value }); aviso("Situação atualizada para toda a equipe."); carregarPublicacoes(); carregarLista(); }
   catch (err) { aviso(err.message); carregarPublicacoes(); }
 };
+// pesquisa avulsa no DJEN (v0.7.5)
+let PQ = { itens: [], pronto: false };
+async function pqIniciar() {
+  if (PQ.pronto) return; PQ.pronto = true;
+  $("#pq-uf").innerHTML = UFS.map(u => `<option ${u === "RJ" ? "selected" : ""}>${u}</option>`).join("");
+  try {
+    const oabs = (await api("/api/oabs")).filter(o => (o.tipo || "oab") === "oab");
+    $("#pq-oabsel").innerHTML = '<option value="">— digitar outra OAB abaixo —</option>' + oabs.map(o => `<option value="${esc(o.numero)}|${esc(o.uf)}">${esc(o.rotulo ? o.rotulo + " — " : "")}OAB ${esc(o.numero)}/${esc(o.uf)}</option>`).join("");
+  } catch (e) { $("#pq-oabsel").innerHTML = '<option value="">— digitar a OAB abaixo —</option>'; }
+}
+$("#pq-card").addEventListener("toggle", () => { if ($("#pq-card").open) pqIniciar(); });
+$("#pq-oabsel").onchange = () => { const v = $("#pq-oabsel").value; if (!v) return; const [n, u] = v.split("|"); $("#pq-oab").value = n; $("#pq-uf").value = u; };
+$("#pq-per").onchange = () => {
+  const m = $("#pq-per").value;
+  $("#pq-dias-box").classList.toggle("hide", m !== "dias"); $("#pq-ini-box").classList.toggle("hide", m !== "intervalo"); $("#pq-fim-box").classList.toggle("hide", m !== "intervalo");
+  if (m === "intervalo" && !$("#pq-ini").value) { $("#pq-ini").value = hojeIso(); $("#pq-fim").value = hojeIso(); }
+};
+function pqPeriodo() {
+  const m = $("#pq-per").value, hoje = hojeIso();
+  if (m === "hoje") return { inicio: hoje, fim: hoje };
+  if (m === "dias") {
+    const n = parseInt($("#pq-dias").value, 10);
+    if (!(n >= 1 && n <= 366)) throw new Error("Informe de 1 a 366 dias.");
+    const d = new Date(); d.setDate(d.getDate() - (n - 1)); return { inicio: iso(d), fim: hoje };
+  }
+  if (!$("#pq-ini").value || !$("#pq-fim").value) throw new Error("Informe a data inicial e a data final.");
+  return { inicio: $("#pq-ini").value, fim: $("#pq-fim").value };
+}
+$("#pq-limpar").onclick = () => { ["#pq-oab", "#pq-num", "#pq-trib", "#pq-nome"].forEach(i => $(i).value = ""); $("#pq-oabsel").value = ""; $("#pq-per").value = "hoje"; $("#pq-per").onchange(); $("#pq-res").innerHTML = ""; $("#pq-st").textContent = ""; PQ.itens = []; };
+$("#pq-card").addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); $("#pq-ir").click(); } });
+$("#pq-ir").onclick = async () => {
+  const btn = $("#pq-ir"); let per;
+  try { per = pqPeriodo(); } catch (e) { $("#pq-st").innerHTML = `<span class="err">${esc(e.message)}</span>`; return; }
+  btn.disabled = true; $("#pq-st").textContent = "Pesquisando no DJEN… pode levar alguns segundos."; $("#pq-res").innerHTML = "";
+  try {
+    const r = await api("/api/dje/pesquisar", "POST", { oab: $("#pq-oab").value, uf: $("#pq-uf").value, numero: $("#pq-num").value, nome: $("#pq-nome").value, tribunal: $("#pq-trib").value, ...per });
+    PQ.itens = r.itens; PQ.filtros = r.filtros; $("#pq-st").textContent = "";
+    pqMostrar(r);
+  } catch (e) { $("#pq-st").innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+  btn.disabled = false;
+};
+function pqMostrar(r) {
+  const f = r.filtros, av = [];
+  if (r.truncado) av.push("<b>Resultado cortado:</b> a pesquisa atingiu o limite de itens ou de tempo. Reduza o período ou acrescente filtros para ver tudo.");
+  if (r.modo === "nome_no_texto") av.push("A API recusou o filtro próprio de nome; a busca foi feita no texto das publicações (pode trazer menos resultados).");
+  if (r.descartados) av.push(`${r.descartados} item(ns) devolvido(s) pela API foi(ram) descartado(s) por não conter o que foi pedido.` + (r.itens.length === 0 && r.total_api > 0 ? " Como nada sobrou, a API pode não estar aplicando um dos filtros: confira o resultado no site do DJEN." : ""));
+  const cab = `<div class="mut" style="margin-bottom:6px"><b>${r.itens.length}</b> publicação(ões) em <b>${r.processos}</b> processo(s) · período ${dataBr(f.inicio)} a ${dataBr(f.fim)}</div>` + av.map(a => `<div class="aviso" style="margin-bottom:6px">${a}</div>`).join("");
+  if (!r.itens.length) { $("#pq-res").innerHTML = cab + '<div class="card mut">Nada encontrado com esses filtros neste período.</div>'; return; }
+  $("#pq-res").innerHTML = cab + r.itens.map((b, i) => {
+    const dest = lista(b.destinatarios).map(d => esc(d.nome) + (d.polo ? " [" + esc(d.polo) + "]" : "")).join("; ");
+    const advs = lista(b.advogados).map(a => `${esc(a.nome)} (OAB ${esc(a.oab)})`).join("; ");
+    const curto = (b.texto || "").length > 600;
+    return `<div class="pub">
+      <div class="acoes" style="justify-content:space-between"><span><b>${fmt(b.data_disp)}</b> · ${esc(b.tribunal)} · ${esc(b.tipo_com)}${b.tipo_doc ? " · " + esc(b.tipo_doc) : ""}</span><span class="num">${esc(b.numero_fmt)}</span></div>
+      <div class="mut">${[b.classe && titulo(b.classe), b.orgao].filter(Boolean).map(esc).join(" · ")}</div>
+      ${dest ? `<div class="mut">Destinatários: ${dest}</div>` : ""}${advs ? `<div class="mut">Advogados: ${advs}</div>` : ""}
+      <div class="tx">${esc(curto ? b.texto.slice(0, 600) + "…" : b.texto)}</div>${curto ? `<details><summary class="mut">Texto completo</summary><div class="tx">${esc(b.texto)}</div></details>` : ""}
+      <div class="acoes" style="margin-top:8px">${b.processo_id ? `<span class="tag" style="border-color:var(--ok);color:var(--ok)">já cadastrado</span><button class="b sm sec" data-pqhist="${b.processo_id}">Histórico</button>`
+        : `<button class="b sm" data-pqadd="${i}">Cadastrar no monitor</button>`}${b.link ? `<a class="b sm sec" href="${esc(b.link)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none">Abrir no tribunal</a>` : ""}</div></div>`;
+  }).join("");
+}
+function titulo(s) { s = String(s || ""); return /[A-ZÀ-Ý]{3,}/.test(s) ? s.charAt(0) + s.slice(1).toLowerCase() : s; }
+$("#pq-res").onclick = async (e) => {
+  const h1 = e.target.closest("button[data-pqhist]"), a1 = e.target.closest("button[data-pqadd]");
+  try {
+    if (h1) { await abrirHistorico(Number(h1.dataset.pqhist)); return; }
+    if (a1) {
+      const b = PQ.itens[Number(a1.dataset.pqadd)];
+      if (!await confirmar(`Cadastrar o processo ${b.numero_fmt} e passar a consultá-lo todos os dias (DataJud e DJEN)? Depois você pode editar partes, cliente e demais dados.`, { titulo: "Cadastrar no monitor", ok: "Cadastrar" })) return;
+      const r = await api("/api/processos", "POST", { numeros: b.numero_fmt, monitorar: true });
+      aviso(r.adicionados.length ? "Processo cadastrado e na fila de consulta." : r.repetidos.length ? "Esse processo já estava cadastrado." : "Não foi possível cadastrar: " + ((r.invalidos[0] || {}).motivo || ""));
+      PQ.itens.forEach(x => { if (x.numero === b.numero && r.adicionados.length) x.processo_id = -1; });
+      carregarLista(); const atual = await api("/api/processos"); const p = atual.find(x => x.numero_limpo === b.numero);
+      PQ.itens.forEach(x => { if (p && x.numero === b.numero) x.processo_id = p.id; });
+      pqMostrar({ itens: PQ.itens, filtros: PQ.filtros || { inicio: hojeIso(), fim: hojeIso() }, processos: new Set(PQ.itens.map(x => x.numero)).size, descartados: 0, truncado: false, modo: "padrao", total_api: PQ.itens.length });
+    }
+  } catch (err) { aviso(err.message); }
+};
+
 // calcular prazo
 const dPrazo = $("#d-prazo");
 $("#p-lista").onclick = (e) => {

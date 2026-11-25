@@ -6,9 +6,12 @@ devolve JSON {"status","message","count","items":[...]} com o TEXTO das publica�
 Não encontrei documentação oficial; o formato abaixo foi deduzido dessa resposta real.
 Parâmetros de paginação ("pagina") são presumidos e tratados de forma defensiva.
 """
+import datetime as dt
 import json
 import logging
 import re
+import time
+import unicodedata
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -227,11 +230,16 @@ def descrever_filtro(tipo, termo, uf=""):
     return f'texto "{termo}"'
 
 
-def _paginar(base, base_url, timeout, por_pagina, max_paginas, rotulo):
-    """Percorre as páginas de uma consulta. Devolve (itens brutos, truncado)."""
+def _paginar(base, base_url, timeout, por_pagina, max_paginas, rotulo, limite_seg=None):
+    """Percorre as páginas de uma consulta. Devolve (itens brutos, truncado). `limite_seg`: tempo total máximo (opcional)."""
     base = dict(base, itensPorPagina=por_pagina)
     itens, vistos, total, truncado = [], set(), None, False
+    inicio = time.monotonic()
     for pagina in range(1, max_paginas + 1):
+        if limite_seg and pagina > 1 and time.monotonic() - inicio > limite_seg:
+            truncado = True
+            log.warning("dje %s: tempo limite de %ss atingido na página %d", rotulo, limite_seg, pagina)
+            break
         url = f"{base_url.rstrip('/')}/api/v1/comunicacao?" + urllib.parse.urlencode(dict(base, pagina=pagina))
         dados = _get(url, timeout)
         if not isinstance(dados, dict) or "items" not in dados:
@@ -291,3 +299,134 @@ def consultar_busca(tipo, termo, uf="", base_url=BASE_URL, desde=None, timeout=6
 
 def consultar_oab(numero, uf, base_url=BASE_URL, desde=None, timeout=60, por_pagina=50, max_paginas=20):
     return consultar_busca("oab", numero, uf, base_url, desde, timeout, por_pagina, max_paginas)
+
+
+# ---------------------------------------------------------------- v0.7.5: pesquisa avulsa (não grava nada)
+PESQ_MAX_DIAS = 366
+PESQ_TEXTO_MAX = 6000
+
+
+class ErroPesquisa(ValueError):
+    pass
+
+
+def _norm(t):
+    t = unicodedata.normalize("NFKD", str(t or ""))
+    return re.sub(r"[^A-Z0-9]+", " ", "".join(c for c in t if not unicodedata.combining(c)).upper()).strip()
+
+
+def _data_pesq(v, rotulo):
+    v = str(v or "").strip()
+    try:
+        return dt.date.fromisoformat(v)
+    except ValueError:
+        raise ErroPesquisa(f"{rotulo}: use uma data válida (AAAA-MM-DD).")
+
+
+def validar_pesquisa(oab="", uf="", numero="", nome="", texto="", tribunal="", inicio="", fim="", hoje=None):
+    """Confere e normaliza os filtros. Devolve dict limpo ou levanta ErroPesquisa."""
+    hoje = hoje or dt.date.today()
+    f = {"oab": re.sub(r"[^0-9A-Za-z]", "", str(oab or "")).upper().lstrip("0"), "uf": str(uf or "").strip().upper(),
+         "numero": so_digitos(numero), "nome": re.sub(r"\s+", " ", str(nome or "")).strip(),
+         "texto": re.sub(r"\s+", " ", str(texto or "")).strip(), "tribunal": re.sub(r"[^0-9A-Za-z]", "", str(tribunal or "")).upper()}
+    if f["oab"] and not re.fullmatch(r"[0-9]{1,7}[A-Z]?", f["oab"]):
+        raise ErroPesquisa("Número da OAB inválido (só dígitos; letra final opcional).")
+    if f["oab"] and not re.fullmatch(r"[A-Z]{2}", f["uf"]):
+        raise ErroPesquisa("Informe a UF da OAB.")
+    if str(numero or "").strip() and len(f["numero"]) != 20:
+        raise ErroPesquisa("O número do processo deve ter 20 dígitos (formato CNJ).")
+    if f["nome"] and len(_norm(f["nome"])) < 3:
+        raise ErroPesquisa("O nome da parte deve ter pelo menos 3 letras.")
+    if f["texto"] and len(f["texto"]) < 3:
+        raise ErroPesquisa("O trecho de texto deve ter pelo menos 3 caracteres.")
+    if not (f["oab"] or f["numero"] or f["nome"] or f["texto"]):
+        raise ErroPesquisa("Informe pelo menos um filtro: OAB, número do processo, nome da parte ou trecho de texto.")
+    if f["tribunal"] and not re.fullmatch(r"[A-Z0-9]{2,10}", f["tribunal"]):
+        raise ErroPesquisa("Sigla de tribunal inválida (ex.: TJRJ, TRT1).")
+    di, df = _data_pesq(inicio, "Data inicial"), _data_pesq(fim, "Data final")
+    if di > df:
+        raise ErroPesquisa("A data inicial não pode ser depois da data final.")
+    if df > hoje:
+        df = hoje
+        if di > df:
+            raise ErroPesquisa("A data inicial está no futuro.")
+    if (df - di).days > PESQ_MAX_DIAS:
+        raise ErroPesquisa(f"Período máximo: {PESQ_MAX_DIAS} dias.")
+    f["inicio"], f["fim"] = di.isoformat(), df.isoformat()
+    return f
+
+
+def _confere(item, f):
+    """Confere LOCALMENTE se a publicação atende aos filtros. Protege contra a API ignorar um parâmetro sem avisar:
+    nunca mostramos como resultado algo que não contenha o que foi pedido."""
+    destinos = " ".join(str(d.get("nome") or "") for d in _lista_json(item["destinatarios"]))
+    advs = _lista_json(item["advogados"])
+    if f["numero"] and item["numero"] != f["numero"]:
+        return False
+    if f["tribunal"] and item["tribunal"].upper() != f["tribunal"]:
+        return False
+    if f["oab"]:
+        dig = re.sub(r"\D", "", f["oab"]).lstrip("0")
+        achou = any(re.sub(r"\D", "", str(a.get("oab", "")).partition("/")[0]).lstrip("0") == dig for a in advs)
+        achou = achou or bool(re.search(r"(?<!\d)0*" + re.escape(dig) + r"(?!\d)", item["texto"]))
+        if not achou:
+            return False
+    campo = _norm(destinos + " " + item["texto"])
+    if f["nome"] and not all(p in campo.split() for p in _norm(f["nome"]).split()):
+        return False
+    if f["texto"] and _norm(f["texto"]) not in _norm(item["texto"] + " " + destinos):
+        return False
+    return True
+
+
+def _lista_json(s):
+    try:
+        v = json.loads(s or "[]")
+        return [x for x in v if isinstance(x, dict)] if isinstance(v, list) else []
+    except (TypeError, ValueError):
+        return []
+
+
+def pesquisar(filtros, base_url=BASE_URL, timeout=60, por_pagina=50, max_paginas=20, limite_seg=150):
+    """Pesquisa avulsa no DJEN com os filtros combinados (E). `filtros` já validado por validar_pesquisa.
+    Devolve {"itens", "truncado", "descartados", "modo", "total_api"}. Não grava nada.
+    Nome da parte: tenta o parâmetro próprio da API (nomeParte); se a API o recusar (HTTP 400/422), refaz como busca
+    no texto e avisa em `modo`. Em qualquer caso, cada resultado é conferido localmente (ver _confere)."""
+    f = filtros
+    base = {"dataDisponibilizacaoInicio": f["inicio"], "dataDisponibilizacaoFim": f["fim"]}
+    if f["oab"]:
+        base.update(numeroOab=f["oab"], ufOab=f["uf"])
+    if f["numero"]:
+        base["numeroProcesso"] = f["numero"]
+    if f["tribunal"]:
+        base["siglaTribunal"] = f["tribunal"]
+    if f["texto"]:
+        base["texto"] = f["texto"]
+    modo = "padrao"
+    rotulo = "pesquisa"
+    if f["nome"]:
+        try:
+            brutos, trunc = _paginar(dict(base, nomeParte=f["nome"]), base_url, timeout, por_pagina, max_paginas, rotulo, limite_seg)
+        except ErroAPI as e:
+            if e.codigo not in (400, 422):
+                raise
+            log.warning("dje pesquisa: a API recusou nomeParte (%s); refazendo como busca no texto", e.codigo)
+            modo = "nome_no_texto"
+            alt = dict(base)
+            alt["texto"] = (f["texto"] + " " + f["nome"]).strip() if f["texto"] else f["nome"]
+            brutos, trunc = _paginar(alt, base_url, timeout, por_pagina, max_paginas, rotulo, limite_seg)
+    else:
+        brutos, trunc = _paginar(base, base_url, timeout, por_pagina, max_paginas, rotulo, limite_seg)
+    links = {str(i.get("id")): str(i.get("link") or "") for i in brutos}
+    itens, descartados = [], 0
+    for r in (normalizar_item(i) for i in brutos):
+        if r["pub_id"] == "None":
+            continue
+        if not _confere(r, f):
+            descartados += 1
+            continue
+        r["link"] = links.get(r["pub_id"], "")
+        r["texto"] = r["texto"][:PESQ_TEXTO_MAX]
+        itens.append(r)
+    itens.sort(key=lambda r: (r["data_disp"], r["pub_id"]), reverse=True)
+    return {"itens": itens, "truncado": bool(trunc), "descartados": descartados, "modo": modo, "total_api": len(brutos)}
