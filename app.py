@@ -26,7 +26,9 @@ from urllib.parse import parse_qs, urlparse
 import auth
 import agenda
 import historico
+import janela
 import lembretes
+import partes
 import risco
 import prazos
 import backup
@@ -396,7 +398,7 @@ def r_publicacoes(h):
     q = parse_qs(urlparse(h.path).query)
     pid = int(q["processo"][0]) if q.get("processo") else None
     sit = (q.get("situacao") or [""])[0]
-    h.json(CTX.banco.publicacoes(pid, so_novas=q.get("novas", ["0"])[0] == "1", situacao=sit or None))
+    h.json(partes.enriquecer_publicacoes(CTX.banco, CTX.banco.publicacoes(pid, so_novas=q.get("novas", ["0"])[0] == "1", situacao=sit or None)))
 
 
 def r_diag_dje(h):
@@ -551,7 +553,39 @@ def r_log(h):
 
 
 def r_listar(h):
-    h.json(CTX.banco.listar())
+    h.json(partes.enriquecer(CTX.banco, CTX.banco.listar()))
+
+
+def r_proc_dados(h, pid):
+    """v0.7.4: dados editáveis do processo (partes, advogados, vara, comarca, tipo de ação)."""
+    d = partes.obter_dados(CTX.banco, int(pid))
+    if not d:
+        return h.json({"erro": "Processo não encontrado."}, 404)
+    h.json(d)
+
+
+def r_proc_dados_salvar(h, pid):
+    if not _pid_ok(h, pid):
+        return
+    try:
+        v = partes.salvar(CTX.banco, int(pid), h.corpo())
+    except agenda.ErroAgenda as e:
+        return _erro_agenda(h, e)
+    p = CTX.banco.obter(int(pid))
+    h.auditar("processo_dados_editados", f"{p['numero']} (por {h.usuario['nome']})")
+    h.json({"ok": True, "versao": v})
+
+
+def r_proc_dados_restaurar(h, pid):
+    p = _pid_ok(h, pid)
+    if not p:
+        return
+    try:
+        v = partes.restaurar_automatico(CTX.banco, int(pid))
+    except agenda.ErroAgenda as e:
+        return _erro_agenda(h, e)
+    h.auditar("processo_dados_restaurados", p["numero"])
+    h.json({"ok": True, "versao": v})
 
 
 def _disparar(ids=None):
@@ -981,6 +1015,9 @@ ROTAS = [
     ("POST", r"/api/processos/(\d+)/posicao", r_posicao, "usu"),
     ("POST", r"/api/penhora/avisar", r_penhora_avisar, "adm"),
     ("GET", r"/api/processos/(\d+)/historico", r_historico, "usu"),
+    ("GET", r"/api/processos/(\d+)/dados", r_proc_dados, "usu"),
+    ("POST", r"/api/processos/(\d+)/dados", r_proc_dados_salvar, "usu"),
+    ("POST", r"/api/processos/(\d+)/dados/restaurar", r_proc_dados_restaurar, "usu"),
     ("POST", r"/api/processos/(\d+)/anotacoes", r_anotacao_add, "usu"),
     ("POST", r"/api/anotacoes/(\d+)", r_anotacao_edit, "usu"),
     ("DELETE", r"/api/anotacoes/(\d+)", r_anotacao_del, "usu"),
@@ -1188,6 +1225,19 @@ def verificar_backup():
         logging.getLogger("monitor").info("Backup automático gravado: %s", arq)
 
 
+def _abrir_painel(url):
+    """Abre o painel: janela própria (Chrome/Edge em modo aplicativo) se estiver ligada e disponível; senão, o navegador padrão."""
+    try:
+        if CTX.config.dados.get("janela_propria", True):
+            usado = janela.abrir(url)
+            if usado:
+                logging.getLogger("monitor").info("painel aberto em janela própria (%s)", usado)
+                return
+    except Exception:   # noqa: BLE001 — qualquer falha cai no navegador padrão
+        logging.getLogger("monitor").exception("janela própria falhou")
+    webbrowser.open(url)
+
+
 def iniciar():
     try:
         DADOS.mkdir(parents=True, exist_ok=True)
@@ -1244,7 +1294,7 @@ def iniciar():
     print()
     print("Para encerrar, feche esta janela ou pressione Ctrl+C.")
     if not os.environ.get("MONITOR_NAO_ABRIR"):
-        threading.Timer(1.0, lambda: webbrowser.open(url)).start()
+        threading.Timer(1.0, lambda: _abrir_painel(url)).start()
     try:
         servidor.serve_forever()
     except KeyboardInterrupt:

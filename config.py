@@ -15,6 +15,7 @@ PADRAO = {
     "porta": 8765,
     "endpoints_override": {},
     "dje_ativo": True,
+    "janela_propria": True,   # v0.7.4: abre o painel em janela de aplicativo (Chrome/Edge); desligado = navegador padrão
     "dje_base_url": "https://comunicaapi.pje.jus.br",
     # v0.5: varredura diária dos processos em blocos (cada processo consultado 1x por dia, dentro da janela de horário)
     "varredura": {"ativa": True, "bloco": 100, "intervalo_min": 10, "inicio": "02:00"},  # começa de madrugada e vai até consultar tudo (sem horário final)
@@ -93,6 +94,8 @@ class Config:
                 d["intervalo_horas"] = h
             if "dje_ativo" in novo:
                 d["dje_ativo"] = bool(novo["dje_ativo"])
+            if "janela_propria" in novo:
+                d["janela_propria"] = bool(novo["janela_propria"])
             v = novo.get("varredura")
             if isinstance(v, dict):
                 nv = dict(d["varredura"])

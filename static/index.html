@@ -153,6 +153,14 @@
   .pn { border:1px solid var(--bd); border-left:5px solid var(--mut); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:var(--card); }
   .pn.critico { border-left-color:var(--err); } .pn.alto { border-left-color:var(--warn); } .pn.medio { border-left-color:var(--gold); } .pn.oportunidade { border-left-color:var(--ok); }
   .pn ul { margin:6px 0 0 18px; padding:0; } .pn li { margin:3px 0; font-size:13.5px; }
+  .pt-lin { display:grid; grid-template-columns:1fr 112px 168px 34px; gap:6px; margin-bottom:6px; align-items:center; }
+  .pt-lin.adv { grid-template-columns:1fr 112px 168px 34px; }
+  .pt-lin input,.pt-lin select { width:100%; min-width:0; }
+  .pt-cab { font-size:12px; color:var(--mut); display:grid; grid-template-columns:1fr 112px 168px 34px; gap:6px; margin:6px 0 2px; }
+  .pt-cab.adv { grid-template-columns:1fr 112px 168px 34px; }
+  .ddgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .qd { font-size:13px; margin-top:3px; } .qd .lc { color:var(--ok); font-weight:600; }
+  @media (max-width:640px){ .pt-lin,.pt-lin.adv { grid-template-columns:1fr 1fr 40px; } .pt-lin > input:first-child { grid-column:1 / -1; } .pt-lin.adv > input:nth-child(2) { grid-column:1 / 3; } .pt-cab,.pt-cab.adv { display:none; } .ddgrid { grid-template-columns:1fr; } }
   dialog::backdrop { background:rgba(10,15,25,.55); }
   #d-conf p { white-space:pre-wrap; margin:0 0 12px; }
   #msg { position:fixed; bottom:16px; right:16px; background:var(--tx); color:var(--bg); padding:10px 14px; border-radius:10px; max-width:380px; display:none; box-shadow:0 8px 24px rgba(10,15,35,.3); }
@@ -222,6 +230,31 @@
   <label for="dm-motivo">Motivo</label><select id="dm-motivo" class="sel-motivo" style="width:100%;padding:8px"></select>
   <label for="dm-obs">Observação (opcional)</label><input id="dm-obs" maxlength="120">
   <div class="acoes" style="margin-top:12px"><button class="b" type="button" id="dm-ok">Monitorar</button><button class="b sec" type="button" id="dm-x">Cancelar</button></div>
+</form></dialog>
+<dialog id="d-dados" style="max-width:820px"><form method="dialog">
+  <h3 style="margin-top:0">Editar dados do processo</h3>
+  <p class="mut" id="dd-num"></p>
+  <div class="ddgrid">
+    <div><label for="dd-apelido">Apelido</label><input id="dd-apelido" maxlength="120" style="width:100%"></div>
+    <div><label for="dd-cliente">Cliente</label><input id="dd-cliente" maxlength="120" style="width:100%"></div>
+    <div><label for="dd-tipo">Tipo de ação</label><input id="dd-tipo" list="dl-tipoacao" maxlength="80" style="width:100%" placeholder="ex.: Cobrança, Indenizatória, Execução, Reclamação Trabalhista"><span class="mut" id="dd-tipo-auto"></span></div>
+    <div><label for="dd-pasta">Pasta</label><input id="dd-pasta" maxlength="60" style="width:100%"></div>
+    <div><label for="dd-vara">Vara / órgão</label><input id="dd-vara" maxlength="160" style="width:100%"><span class="mut" id="dd-vara-auto"></span></div>
+    <div><label for="dd-comarca">Comarca</label><input id="dd-comarca" maxlength="80" style="width:100%" placeholder="ex.: Capital"></div>
+  </div>
+  <datalist id="dl-tipoacao"><option value="Indenizatória"><option value="Cobrança"><option value="Execução de título extrajudicial"><option value="Cumprimento de sentença"><option value="Reclamação Trabalhista"><option value="Despejo"><option value="Monitória"><option value="Busca e apreensão"><option value="Procedimento comum"><option value="Embargos à execução"><option value="Mandado de segurança"><option value="Revisional"><option value="Obrigação de fazer"><option value="Consignação em pagamento"><option value="Inventário"></datalist>
+  <h4 style="margin:14px 0 2px">Partes</h4>
+  <p class="mut" style="margin:0 0 4px">Polo = ativo (autor/exequente) ou passivo (réu/executado). <b>Lado</b> = nosso cliente ou parte contrária: um litisconsorte do mesmo polo pode ser contrário ao nosso cliente.</p>
+  <div class="pt-cab"><span>Nome</span><span>Polo</span><span>Lado</span><span></span></div>
+  <div id="dd-partes"></div>
+  <div class="acoes"><button type="button" class="b sm sec" id="dd-add-parte">+ Parte</button><button type="button" class="b sm sec" id="dd-inverter">Inverter polos de todas</button></div>
+  <h4 style="margin:14px 0 2px">Advogados</h4>
+  <div class="pt-cab adv"><span>Nome</span><span>OAB (12345/RJ)</span><span>Lado</span><span></span></div>
+  <div id="dd-advs"></div>
+  <div class="acoes"><button type="button" class="b sm sec" id="dd-add-adv">+ Advogado</button></div>
+  <p class="mut" id="dd-orig" style="margin-top:10px"></p>
+  <p class="err" id="dd-erro"></p>
+  <div class="acoes" style="margin-top:12px"><button class="b" type="button" id="dd-ok">Salvar</button><button class="b sec" type="button" id="dd-x">Cancelar</button><button class="b sec" type="button" id="dd-auto" title="Descarta o que foi editado e refaz a leitura automática">Voltar ao automático</button></div>
 </form></dialog>
 <dialog id="d-resp"><form method="dialog">
   <h3 style="margin-top:0">Responsável pelo processo</h3>
@@ -437,6 +470,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <div class="acoes">
       <label style="margin:0" for="p-sit">Situação</label>
       <select id="p-sit"><option value="nova">Novas</option><option value="analise">Em análise</option><option value="tratada">Tratadas</option><option value="">Todas</option></select>
+      <input id="p-busca" placeholder="Buscar por número, parte, cliente, vara ou texto" style="flex:1;min-width:220px" aria-label="Buscar nas publicações">
       <button class="b sec sm" id="b-pub-vistas">Passar as novas para “em análise”</button>
       <span class="mut" id="p-info" style="align-self:center"></span>
     </div>
@@ -610,6 +644,12 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     </div>
     <p class="mut">Gmail: use uma “senha de app” criada só para esta finalidade, nunca a senha da conta. A senha fica gravada em texto simples no arquivo <code>config.json</code> da pasta de dados do servidor (não vai para o backup nem para o GitHub).</p>
     <div class="acoes"><button class="b" id="b-cfg">Salvar</button><button class="b sec" id="b-teste">Enviar e-mail de teste (salve antes)</button></div>
+  </div>
+  <div class="card" id="jn-cfg">
+    <b>Janela do programa</b>
+    <p class="mut">O painel abre numa janela própria, sem barra de endereço (usa o Chrome, ou o Edge se não houver Chrome; nada é instalado). Se desmarcar, abre no navegador padrão. A mudança vale na próxima vez que o Monitor for iniciado. Fechar a janela <b>não encerra</b> o Monitor: para encerrar, feche a janela preta.</p>
+    <label><input type="checkbox" id="jn-ativa" style="width:auto"> Abrir em janela própria</label>
+    <div class="acoes" style="margin-top:8px"><button class="b" id="jn-salvar" type="button">Salvar</button></div>
   </div>
   <div class="card" id="ag-cfg">
     <b>Resumo diário da agenda por e-mail</b>
@@ -1186,6 +1226,23 @@ async function carregarLista() {
   $("#c-nao").textContent = ativos.filter(p => p.monitorar && p.status === "nao_encontrado").length;
   renderLista();
 }
+function nomesCurtos(a, n = 4) { a = a || []; return a.slice(0, n).map(esc).join("; ") + (a.length > n ? ` <span class="mut">+${a.length - n}</span>` : ""); }
+function htmlPartes(x) {
+  const r = x.resumo_partes || {}, sem = [...(r.ativo || []), ...(r.passivo || []), ...(r.outros || [])];
+  if ((r.cliente || []).length || (r.contraria || []).length)
+    return `<span class="lc">Cliente:</span> ${nomesCurtos(r.cliente) || "—"} <b>×</b> <b>Parte contrária:</b> ${nomesCurtos(r.contraria) || '<span class="warn">não identificada</span>'}` + (sem.length ? ` <span class="mut">· sem lado definido: ${nomesCurtos(sem, 2)}</span>` : "");
+  if ((r.ativo || []).length || (r.passivo || []).length)
+    return `<b>Polo ativo:</b> ${nomesCurtos(r.ativo) || "—"} <b>×</b> <b>Polo passivo:</b> ${nomesCurtos(r.passivo) || "—"}` + ((r.outros || []).length ? ` <span class="mut">· ${nomesCurtos(r.outros, 2)}</span>` : "");
+  return '<span class="mut">Partes ainda não identificadas (o DJEN só informa quem foi intimado). Use “Editar” para informá-las.</span>';
+}
+function htmlLocal(x) {
+  const t = [x.tipo_exib, x.vara_exib, x.comarca_exib].filter(Boolean);
+  return t.length ? t.map(esc).join(" · ") : "";
+}
+function textoBusca(x) {
+  const r = x.resumo_partes || {};
+  return [x.apelido, x.cliente, x.pasta, x.numero, ...(r.cliente || []), ...(r.contraria || []), ...(r.ativo || []), ...(r.passivo || []), ...(r.outros || []), x.vara_exib, x.tipo_exib, x.comarca_exib].join(" ");
+}
 function semAcento(t) { return String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(); }
 function renderLista() {
   const q = semAcento($("#f-busca").value).trim(), qn = q.replace(/\D/g, ""), sit = $("#f-sit").value;
@@ -1199,7 +1256,7 @@ function renderLista() {
     if (sit === "avisos" && !p.aviso) return false;
     if (sit === "semoab" && !(p.ativo && p.oab_status === "sem")) return false;
     if (!q) return true;
-    return semAcento(p.apelido + " " + p.cliente + " " + p.pasta + " " + p.numero).includes(q) || (qn.length >= 4 && p.numero_limpo.includes(qn));
+    return semAcento(textoBusca(p)).includes(q) || (qn.length >= 4 && p.numero_limpo.includes(qn));
   });
   FILTRADOS = lista;
   const total = lista.length;
@@ -1216,14 +1273,14 @@ function renderLista() {
     const avisoHtml = p.aviso ? `<div class="warn" style="font-size:13px;margin-top:4px">⚠ ${esc(p.aviso)} <button class="b sm sec" data-disp="${p.id}">Dispensar</button></div>` : "";
     return `<tr>
       <td>${p.apelido ? `<b>${esc(p.apelido)}</b> ` : ""}${p.ativo ? "" : '<span class="tag">arquivado</span> '}${mon}${p.novos ? `<span class="badge">${p.novos} mov. nova(s)</span> ` : ""}${p.pub_novas ? `<span class="badge">${p.pub_novas} publ. nova(s)</span> ` : ""}${p.pub_analise ? `<span class="tag">${p.pub_analise} em análise</span>` : ""}${p.apelido || !p.ativo || p.monitorar || p.novos || p.pub_novas || p.pub_analise ? "<br>" : ""}
-        <span class="num">${esc(p.numero)}</span>${p.motivo_obs ? ` <span class="mut">— ${esc(p.motivo_obs)}</span>` : ""}${oab}${avisoHtml}${p.cliente || p.pasta ? `<br><span class="mut">${esc(p.cliente)}${p.pasta ? " · pasta " + esc(p.pasta) : ""}</span>` : ""}${p.responsavel_nome ? `<br><span class="mut">Responsável: ${esc(p.responsavel_nome)}</span>` : ""}</td>
+        <span class="num">${esc(p.numero)}</span>${p.motivo_obs ? ` <span class="mut">— ${esc(p.motivo_obs)}</span>` : ""}${p.dados_editados ? ' <span class="tag" title="Partes ou dados editados manualmente">editado</span>' : ""}<div class="qd">${htmlPartes(p)}</div>${htmlLocal(p) ? `<div class="mut">${htmlLocal(p)}</div>` : ""}${oab}${avisoHtml}${p.cliente || p.pasta ? `<br><span class="mut">${esc(p.cliente)}${p.pasta ? " · pasta " + esc(p.pasta) : ""}</span>` : ""}${p.responsavel_nome ? `<br><span class="mut">Responsável: ${esc(p.responsavel_nome)}</span>` : ""}</td>
       <td>${esc(p.ultimo_mov || "—")}<br><span class="mut">${fmt(p.ultimo_mov_data)}${p.classe ? " · " + esc(p.classe) : ""}</span>
         ${p.ultima_atualizacao ? `<br><span class="mut">registro do CNJ atualizado em ${fmt(p.ultima_atualizacao)}</span>` : ""}</td>
       <td><span class="st ${cls}">${txt}</span>${p.mensagem ? `<br><span class="mut">${esc(p.mensagem)}</span>` : ""}<br>${p.ultima_consulta ? `<br><span class="mut">consultado: ${fmtUtc(p.ultima_consulta)}</span>` : ""}
         <br><span class="mut">DJEN: ${DJE[p.dje_status] || "—"}${p.pub_total ? ` · ${p.pub_total} publ.${p.pub_ultima ? ", última em " + fmt(p.pub_ultima) : ""}` : ""}</span>${p.dje_status === "erro" && p.dje_mensagem ? `<br><span class="err" style="font-size:13px">${esc(p.dje_mensagem)}</span>` : ""}</td>
       <td><div class="acoes">
         <button class="b sm sec" data-ver="${p.id}">Movimentos</button>
-        ${p.ativo ? `<button class="b sm sec" data-hist="${p.id}">Histórico</button><button class="b sm sec" data-ag="${p.id}">Agendar</button><button class="b sm sec" data-resp="${p.id}">Responsável</button><button class="b sm sec" data-upd="${p.id}">Atualizar</button><button class="b sm sec" data-mon="${p.id}" data-m="${p.monitorar ? 0 : 1}">${p.monitorar ? "Parar de monitorar" : "Monitorar"}</button><button class="b sm sec" data-arq="${p.id}" data-a="0">Arquivar</button>`
+        <button class="b sm sec" data-edit="${p.id}">Editar</button>${p.ativo ? `<button class="b sm sec" data-hist="${p.id}">Histórico</button><button class="b sm sec" data-ag="${p.id}">Agendar</button><button class="b sm sec" data-resp="${p.id}">Responsável</button><button class="b sm sec" data-upd="${p.id}">Atualizar</button><button class="b sm sec" data-mon="${p.id}" data-m="${p.monitorar ? 0 : 1}">${p.monitorar ? "Parar de monitorar" : "Monitorar"}</button><button class="b sm sec" data-arq="${p.id}" data-a="0">Arquivar</button>`
                   : `<button class="b sm sec" data-arq="${p.id}" data-a="1">Reativar</button>`}
         <button class="b sm dg" data-del="${p.id}">Remover</button></div></td></tr>`;
   }).join("");
@@ -1304,6 +1361,7 @@ $("#lista").onclick = async (e) => {
       else { await api("/api/processos/monitorar", "POST", { ids: [Number(b.dataset.mon)], monitorar: false }); aviso("Processo fora do monitoramento diário."); carregarLista(); }
     }
     if (b.dataset.hist) await abrirHistorico(Number(b.dataset.hist));
+    if (b.dataset.edit) await abrirDados(Number(b.dataset.edit));
     if (b.dataset.ag) { irPara("calendario"); await abrirEvento(null, { data: hojeIso(), processo_id: Number(b.dataset.ag) }); }
     if (b.dataset.resp) await pedirResponsavel([Number(b.dataset.resp)]);
     if (b.dataset.upd) { await api(`/api/processos/${b.dataset.upd}/consultar`, "POST", {}); aviso("Processo colocado na fila de consulta."); status(); }
@@ -1365,16 +1423,74 @@ async function status() {
   } catch (e) { $("#st-txt").textContent = "Sem comunicação com o programa."; }
 }
 
+// editar dados do processo (v0.7.4)
+const dDados = $("#d-dados");
+let ED = null;
+const POLO_ROT = { "": "—", A: "Ativo", P: "Passivo" }, LADO_ROT = { "": "não definido", cliente: "Nosso cliente", contraria: "Parte contrária" };
+function optsSel(rot, atual) { return Object.entries(rot).map(([k, v]) => `<option value="${k}" ${k === atual ? "selected" : ""}>${v}</option>`).join(""); }
+function desenharDados() {
+  $("#dd-partes").innerHTML = ED.partes.map((p, i) => `<div class="pt-lin"><input data-k="nome" data-i="${i}" data-l="partes" value="${esc(p.nome)}" maxlength="200" aria-label="Nome da parte">
+    <select data-k="polo" data-i="${i}" data-l="partes" aria-label="Polo">${optsSel(POLO_ROT, p.polo)}</select>
+    <select data-k="lado" data-i="${i}" data-l="partes" aria-label="Lado">${optsSel(LADO_ROT, p.lado)}</select>
+    <button type="button" class="b sm dg" data-rm="${i}" data-l="partes" title="Excluir esta parte" aria-label="Excluir parte">✕</button></div>`).join("") || '<p class="mut">Nenhuma parte. Use “+ Parte”.</p>';
+  $("#dd-advs").innerHTML = ED.advogados.map((p, i) => `<div class="pt-lin adv"><input data-k="nome" data-i="${i}" data-l="advogados" value="${esc(p.nome)}" maxlength="200" aria-label="Nome do advogado">
+    <input data-k="oab" data-i="${i}" data-l="advogados" value="${esc(p.oab || "")}" maxlength="20" placeholder="12345/RJ" aria-label="OAB">
+    <select data-k="lado" data-i="${i}" data-l="advogados" aria-label="Lado">${optsSel(LADO_ROT, p.lado)}</select>
+    <button type="button" class="b sm dg" data-rm="${i}" data-l="advogados" title="Excluir este advogado" aria-label="Excluir advogado">✕</button></div>`).join("") || '<p class="mut">Nenhum advogado.</p>';
+}
+async function abrirDados(pid) {
+  const d = await api(`/api/processos/${pid}/dados`);
+  const p = d.processo;
+  ED = { pid, versao: p.versao, partes: d.partes.map(x => ({ id: x.id, nome: x.nome, polo: x.polo, lado: x.lado, origem: x.origem })),
+         advogados: d.advogados.map(x => ({ id: x.id, nome: x.nome, oab: x.oab, polo: x.polo, lado: x.lado, origem: x.origem })) };
+  $("#dd-num").innerHTML = `<span class="num">${esc(p.numero)}</span>`;
+  $("#dd-apelido").value = p.apelido; $("#dd-cliente").value = p.cliente; $("#dd-pasta").value = p.pasta;
+  $("#dd-tipo").value = p.tipo_acao; $("#dd-vara").value = p.vara; $("#dd-comarca").value = p.comarca;
+  $("#dd-tipo-auto").textContent = p.tipo_auto ? "Automático: " + p.tipo_auto + (p.tipo_acao ? "" : " (campo em branco usa o automático)") : "";
+  $("#dd-vara-auto").textContent = p.vara_auto ? "Automático: " + p.vara_auto + (p.vara ? "" : " (campo em branco usa o automático)") : "";
+  $("#dd-orig").textContent = "Partes e advogados lidos das publicações do DJEN são automáticos e podem estar incompletos; o que você alterar aqui não é sobrescrito pelas próximas consultas.";
+  $("#dd-erro").textContent = "";
+  desenharDados(); dDados.showModal();
+}
+dDados.addEventListener("input", (e) => { const t = e.target; if (t.dataset.l && t.dataset.k) ED[t.dataset.l][Number(t.dataset.i)][t.dataset.k] = t.value; });
+dDados.addEventListener("change", (e) => { const t = e.target; if (t.dataset.l && t.dataset.k) ED[t.dataset.l][Number(t.dataset.i)][t.dataset.k] = t.value; });
+dDados.addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-rm]"); if (!b) return;
+  ED[b.dataset.l].splice(Number(b.dataset.rm), 1); desenharDados();
+});
+$("#dd-add-parte").onclick = () => { ED.partes.push({ nome: "", polo: "", lado: "" }); desenharDados(); const q = $("#dd-partes").querySelectorAll("input[data-k=nome]"); q[q.length - 1].focus(); };
+$("#dd-add-adv").onclick = () => { ED.advogados.push({ nome: "", oab: "", polo: "", lado: "" }); desenharDados(); const q = $("#dd-advs").querySelectorAll("input[data-k=nome]"); q[q.length - 1].focus(); };
+$("#dd-inverter").onclick = () => { ED.partes.forEach(p => { p.polo = p.polo === "A" ? "P" : p.polo === "P" ? "A" : ""; }); desenharDados(); };
+dDados.addEventListener("keydown", (e) => { if (e.key === "Enter" && e.target.tagName === "INPUT") e.preventDefault(); });
+$("#dd-x").onclick = () => dDados.close();
+$("#dd-ok").onclick = async () => {
+  try {
+    const limpa = (l) => l.filter(x => String(x.nome || "").trim() !== "");
+    await api(`/api/processos/${ED.pid}/dados`, "POST", { versao: ED.versao, apelido: $("#dd-apelido").value, cliente: $("#dd-cliente").value, pasta: $("#dd-pasta").value,
+      tipo_acao: $("#dd-tipo").value, vara: $("#dd-vara").value, comarca: $("#dd-comarca").value, partes: limpa(ED.partes), advogados: limpa(ED.advogados) });
+    dDados.close(); aviso("Dados do processo salvos."); atualizarTelasDados();
+  } catch (err) { $("#dd-erro").textContent = err.message; }
+};
+$("#dd-auto").onclick = async () => {
+  if (!await confirmar("Descartar o que foi editado neste processo (partes, advogados, vara, comarca e tipo de ação) e voltar à leitura automática? Apelido, cliente e pasta não mudam.", { titulo: "Voltar ao automático", ok: "Descartar edições" })) return;
+  try { await api(`/api/processos/${ED.pid}/dados/restaurar`, "POST", {}); dDados.close(); aviso("Voltou ao automático."); atualizarTelasDados(); } catch (err) { $("#dd-erro").textContent = err.message; }
+};
+function atualizarTelasDados() { carregarLista(); if (!$("#t-publicacoes").classList.contains("hide")) carregarPublicacoes(); }
+
 // publicações
 function lista(json) { try { return JSON.parse(json || "[]"); } catch (e) { return []; } }
 const SIT_PUB = { nova: "Nova", analise: "Em análise", tratada: "Tratada" };
 let PUBS = [];
 async function carregarPublicacoes() {
   const sit = $("#p-sit").value;
-  const pubs = await api("/api/publicacoes" + (sit ? "?situacao=" + sit : ""));
-  PUBS = pubs;
-  $("#p-info").textContent = pubs.length + " publicação(ões)" + (pubs.length >= 300 ? " (mostrando as 300 mais recentes)" : "");
-  $("#p-lista").innerHTML = pubs.length ? pubs.map((b, i) => {
+  PUBS = await api("/api/publicacoes" + (sit ? "?situacao=" + sit : ""));
+  renderPubs();
+}
+function renderPubs() {
+  const q = semAcento($("#p-busca").value).trim();
+  const vis = PUBS.map((b, i) => [b, i]).filter(([b]) => !q || semAcento(textoBusca(b) + " " + b.texto + " " + b.orgao).includes(q));
+  $("#p-info").textContent = (q ? vis.length + " de " + PUBS.length : PUBS.length) + " publicação(ões)" + (PUBS.length >= 300 ? " (mostrando as 300 mais recentes)" : "");
+  $("#p-lista").innerHTML = vis.length ? vis.map(([b, i]) => {
     const advs = lista(b.advogados).map(a => `${esc(a.nome)} (OAB ${esc(a.oab)})`).join("; ");
     const dest = (b.destinatarios_uniao || []).map(d => esc(d.nome) + (d.polo ? " [" + esc(d.polo) + "]" : "")).join("; ");
     const copias = b.copias > 1 ? `<span class="tag" title="Cópias idênticas: só os destinatários mudam">×${b.copias} cópias</span> ` : "";
@@ -1385,7 +1501,8 @@ async function carregarPublicacoes() {
       <div class="acoes" style="justify-content:space-between"><span><b>${fmt(b.data_disp)}</b> · ${esc(b.tipo_com)}${b.tipo_doc ? " · " + esc(b.tipo_doc) : ""}
         ${copias}${b.cancelada ? '<span class="tag">cancelada/inativa</span>' : ""}</span>
         <span class="num">${esc(b.numero)}</span></div>
-      <div class="mut">${b.apelido ? esc(b.apelido) + " · " : ""}${b.cliente ? esc(b.cliente) + " · " : ""}${esc(b.orgao)}${b.classe ? " · " + esc(b.classe) : ""}${b.responsavel_nome ? " · responsável: " + esc(b.responsavel_nome) : ""}</div>
+      <div class="qd">${htmlPartes(b)}</div>
+      <div class="mut">${b.apelido ? esc(b.apelido) + " · " : ""}${[b.tipo_exib, b.vara_exib || b.orgao, b.comarca_exib].filter(Boolean).map(esc).join(" · ")}${b.responsavel_nome ? " · responsável: " + esc(b.responsavel_nome) : ""} <button class="b sm sec" data-pedit="${b.processo_id}" title="Corrigir partes, vara e demais dados do processo">Editar processo</button></div>
       ${dest ? `<div class="mut">Destinatários: ${dest}</div>` : ""}${advs ? `<div class="mut">Advogados: ${advs}</div>` : ""}${intim}
       <div class="tx">${esc(b.texto)}</div>
       <div class="acoes" style="margin-top:8px"><label style="margin:0" for="ps-${i}">Situação</label>
@@ -1394,6 +1511,7 @@ async function carregarPublicacoes() {
       <div class="mut" style="margin-top:6px">${esc(b.meio)}</div></div>`;
   }).join("") : '<div class="card mut">Nenhuma publicação para exibir.</div>';
 }
+let _tbp; $("#p-busca").oninput = () => { clearTimeout(_tbp); _tbp = setTimeout(renderPubs, 200); };
 $("#p-sit").onchange = carregarPublicacoes;
 $("#p-lista").onchange = async (e) => {
   const sel = e.target.closest("select[data-sit]"); if (!sel) return;
@@ -1404,6 +1522,8 @@ $("#p-lista").onchange = async (e) => {
 // calcular prazo
 const dPrazo = $("#d-prazo");
 $("#p-lista").onclick = (e) => {
+  const be = e.target.closest("button[data-pedit]");
+  if (be) { abrirDados(Number(be.dataset.pedit)).catch(err => aviso(err.message)); return; }
   const bt = e.target.closest("button[data-prazo]"); if (!bt) return;
   const b = PUBS[Number(bt.dataset.prazo)];
   $("#dz-proc").textContent = `${b.numero}${b.apelido ? " · " + b.apelido : ""} — publicação disponibilizada em ${fmt(b.data_disp)}`;
@@ -1602,6 +1722,7 @@ async function carregarConfig() {
   $("#m-auto").checked = c.monitoramento.auto_sem_oab; $("#m-dias").value = c.monitoramento.auto_dias;
   const pz = c.prazos || { feriados_extras: [], recesso: { ativo: true, inicio: "12-20", fim: "01-20" } };
   $("#z-extras").value = (pz.feriados_extras || []).join("\n"); $("#z-rec").checked = pz.recesso.ativo; $("#z-ini").value = pz.recesso.inicio; $("#z-fim").value = pz.recesso.fim;
+  $("#jn-ativa").checked = c.janela_propria !== false;
   const ag = c.agenda || { email_ativo: true, hora: "07:00", geral_recebe_tudo: true };
   $("#ag-ativo").checked = ag.email_ativo; $("#ag-hora").value = ag.hora; $("#ag-geral").checked = ag.geral_recebe_tudo;
   const e = c.email;
@@ -1643,6 +1764,7 @@ $("#b-cfg").onclick = async () => {
     aviso("Configurações salvas."); carregarConfig();
   } catch (e) { aviso(e.message); }
 };
+$("#jn-salvar").onclick = async () => { try { await api("/api/config", "POST", { janela_propria: $("#jn-ativa").checked }); aviso("Salvo. Vale na próxima vez que o Monitor for iniciado."); carregarConfig(); } catch (e) { aviso(e.message); } };
 $("#ag-salvar").onclick = async () => { try { await api("/api/config", "POST", { agenda: { email_ativo: $("#ag-ativo").checked, hora: $("#ag-hora").value, geral_recebe_tudo: $("#ag-geral").checked } }); aviso("Resumo da agenda salvo."); carregarConfig(); } catch (e) { aviso(e.message); } };
 $("#ag-agora").onclick = async () => { try { const r = await api("/api/agenda/enviar-resumo", "POST", {}); aviso(r.enviados ? `${r.enviados} e-mail(s) enviado(s).` : (r.erros ? "Falha no envio: veja o log." : "Nada a enviar agora (" + r.motivo + ").")); } catch (e) { aviso(e.message); } };
 $("#b-teste").onclick = async () => { try { await api("/api/email/teste", "POST", {}); aviso("E-mail de teste enviado."); } catch (e) { aviso(e.message); } };

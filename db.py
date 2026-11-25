@@ -7,8 +7,12 @@ import threading
 
 import agenda
 import historico
+import partes
 import risco
 import agrupar
+import logging
+
+log = logging.getLogger("monitor.db")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS processos(
@@ -172,6 +176,7 @@ class Banco:
         agenda.migrar(self)
         historico.migrar(self)
         risco.migrar(self)
+        partes.migrar(self)
 
     def _migrar(self):
         """v0.1.1: 'baseline_feito' registra se a 1ª consulta bem-sucedida já ocorreu.
@@ -392,6 +397,10 @@ class Banco:
                     novas.append(it)
                     grupos_novos[g] = it
             self.conn.execute("UPDATE processos SET dje_baseline=1 WHERE id=?", (pid,))
+            try:
+                partes.atualizar(self, pid, commit=False)   # partes e advogados vistos nas publicações (v0.7.4)
+            except Exception:   # noqa: BLE001 — a leitura das partes nunca pode impedir o registro das publicações
+                log.exception("partes: falha ao ler as partes do processo %s", pid)
             self.conn.commit()
         return novas
 

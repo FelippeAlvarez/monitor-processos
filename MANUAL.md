@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.3)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.4)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -362,3 +362,21 @@ Como usar
 Limites (leia): a leitura é por palavras-chave nos andamentos do DataJud e nas publicações do DJEN já guardados. Pode errar para mais ou para menos, e não vê o que não foi publicado (por exemplo, citação por oficial de justiça sem andamento). O programa não consulta contas, SISBAJUD nem qualquer sistema de bloqueio. Não substitui a conferência nos autos.
 Consulta por CPF/CNPJ: não há (nesta versão) monitor separado por documento; use o campo "Cliente" dos processos ("Agrupar por cliente") e os filtros por CPF/CNPJ da aba Filtros para descobrir processos novos.
 Base legal conferida no texto compilado do Planalto (arquivo de 10/10/2026): CPC arts. 523, 829, 854 e 792.
+
+32. PARTES, EDIÇÃO DO PROCESSO E JANELA PRÓPRIA (v0.7.4)
+Partes e dados do processo
+- A aba Processos mostra, em cada processo, "Cliente: ... × Parte contrária: ...", o tipo de ação, a vara e a comarca. A aba Publicações mostra a mesma linha em cada publicação, para identificar de qual processo ela é.
+- De onde vêm os nomes: o DataJud público NÃO informa as partes. Elas são lidas das publicações do DJEN: (1) do campo "destinatários" (a "Lista de distribuição" costuma trazer todas as partes; uma intimação traz só quem foi intimado) e (2) do cabeçalho do texto (linhas como "EXEQUENTE : ...", "EXECUTADO : ...", "ADVOGADO(A) : ... (OAB RJ123)"). Por isso, em processo onde só o nosso cliente foi intimado, a parte contrária pode não aparecer: é o limite da fonte. Complete com "Editar".
+- Lado automático: o programa deduz qual polo é o do nosso cliente pela nossa OAB (cadastrada em OABs/filtros) entre os advogados e pelo nome do campo "Cliente". Quando não consegue, mostra "Polo ativo × Polo passivo" em vez de "Cliente × Parte contrária".
+- Tipo de ação e vara automáticos vêm da classe e do órgão (DataJud ou publicações); a comarca não é automática.
+Editar (botão "Editar" no processo, ou "Editar processo" na publicação)
+- Campos: apelido, cliente, pasta, tipo de ação, vara/órgão e comarca; lista de partes (nome, polo ativo/passivo, lado nosso cliente/parte contrária); lista de advogados (nome, OAB, lado).
+- Dá para incluir, excluir e renomear partes, inverter o polo (botão "Inverter polos de todas" ou escolhendo por parte) e mover uma parte, mesmo litisconsorte do mesmo polo, para o lado da parte contrária por não ser o cliente.
+- O que você edita nunca é sobrescrito pelas consultas seguintes, e o que você exclui não volta. "Voltar ao automático" descarta as edições de partes, advogados, vara, comarca e tipo de ação (apelido, cliente e pasta não mudam). Campo de vara ou tipo em branco usa o automático.
+- Se outra pessoa da equipe salvar o mesmo processo enquanto você edita, o programa avisa em vez de sobrescrever. Quem alterou fica no registro de auditoria.
+- A busca da aba Processos e a da aba Publicações encontram também pelo nome das partes, vara e tipo de ação.
+Janela própria
+- O painel abre numa janela de aplicativo do Chrome (ou do Edge, se não houver Chrome), sem barra de endereço, com perfil separado do navegador do dia a dia. Nada é instalado. Se não achar nenhum dos dois, abre o navegador padrão.
+- Configurações > "Janela do programa" desliga a opção (vale na próxima vez que o Monitor for iniciado).
+- Fechar a janela NÃO encerra o Monitor (ele continua na janela preta, fazendo as consultas). Para encerrar, feche a janela preta.
+- Para abrir de novo sem reiniciar: no navegador, endereço http://127.0.0.1:8765.
