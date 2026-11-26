@@ -283,19 +283,19 @@ class Prazos(unittest.TestCase):
             self.assertIsNotNone(cal.feriado(self.d(md)), md)
         self.assertIsNone(cal.feriado(self.d("2026-02-17")))   # Carnaval não é feriado nacional por lei: só entra se cadastrado
 
-    def test_recesso_20_12_a_20_01_inclusive(self):
-        r = prazos.calcular(self.d("2026-12-18"), 1)           # publica 21/12 (dentro do recesso); contagem só depois de 20/01
-        self.assertEqual((r["publicacao"], r["inicio"], r["vencimento"]), ("2026-12-21", "2027-01-21", "2027-01-21"))
+    def test_recesso_20_12_a_19_01_inclusive(self):
+        r = prazos.calcular(self.d("2026-12-18"), 1)           # publica 21/12 (dentro do recesso); contagem volta em 20/01 (padrão do escritório)
+        self.assertEqual((r["publicacao"], r["inicio"], r["vencimento"]), ("2026-12-21", "2027-01-20", "2027-01-20"))
         cal = prazos.Calendario(recesso={"ativo": False})
         self.assertEqual(prazos.calcular(self.d("2026-12-18"), 1, cal)["inicio"], "2026-12-22")
-        self.assertTrue(prazos.Calendario().em_recesso(self.d("2027-01-20")))
-        self.assertFalse(prazos.Calendario().em_recesso(self.d("2027-01-21")))
+        self.assertTrue(prazos.Calendario().em_recesso(self.d("2027-01-19")))
+        self.assertFalse(prazos.Calendario().em_recesso(self.d("2027-01-20")))
         self.assertFalse(prazos.Calendario().em_recesso(self.d("2026-12-19")))
 
     def test_prazo_atravessando_o_recesso_nao_conta_os_dias_suspensos(self):
-        r = prazos.calcular(self.d("2026-12-10"), 10)          # publica 11/12; dias 14..18 (5), depois recesso; 21/01.. (5)
+        r = prazos.calcular(self.d("2026-12-10"), 10)          # publica 11/12; dias 14..18 (5), depois recesso; 20/01.. (5)
         self.assertEqual(r["inicio"], "2026-12-14")
-        self.assertEqual(r["vencimento"], "2027-01-27")
+        self.assertEqual(r["vencimento"], "2027-01-26")
 
     def test_entradas_invalidas(self):
         for dias in (0, -1, 401, "5", None, 2.5, True):

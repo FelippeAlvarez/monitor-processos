@@ -22,7 +22,7 @@ PADRAO = {
     # v0.5.2: inclusão/saída automática do monitoramento diário conforme a OAB apareça (ou não) nas publicações do processo
     "monitoramento": {"auto_sem_oab": True, "auto_dias": 180},
     # v0.6: cálculo de prazo (feriados extras: lista de "AAAA-MM-DD nome"; recesso: MM-DD a MM-DD, inclusive)
-    "prazos": {"feriados_extras": [], "recesso": {"ativo": True, "inicio": "12-20", "fim": "01-20"}},
+    "prazos": {"feriados_extras": [], "recesso": {"ativo": True, "inicio": "12-20", "fim": "01-19"}},
     "pasta_backup": "",          # vazio = <pasta de dados>/backups (pode ser uma pasta do Dropbox)
     "backup_ativo": True,
     "backup_hora": "02:00",

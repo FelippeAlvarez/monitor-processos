@@ -5,7 +5,7 @@ Regras (conferidas no texto legal em 23/11/2026):
 - CPC art. 224, caput: exclui o dia do começo e inclui o do vencimento.
 - CPC art. 224, § 2º e Lei 11.419/2006 art. 4º, § 3º: considera-se publicação o primeiro dia útil seguinte ao da disponibilização.
 - CPC art. 224, § 3º e Lei 11.419/2006 art. 4º, § 4º: a contagem começa no primeiro dia útil que seguir ao da publicação.
-- CPC art. 220: suspende-se o curso do prazo de 20/12 a 20/01, inclusive (configurável).
+- CPC art. 220: suspende-se o curso do prazo de 20/12 a 20/01, inclusive. PADRÃO ADOTADO: 20/12 a 19/01 (decisão do titular, 26/11/2026; prazo mais curto na dúvida; 20/01 conta como dia útil nacional). Configurável.
 - Feriados nacionais: Lei 662/1949 (1/1, 21/4, 1/5, 7/9, 2/11, 15/11, 25/12), Lei 6.802/1980 (12/10) e Lei 14.759/2023 (20/11).
 Só entram feriados nacionais (e os "extras" que a administração cadastrar). Na dúvida, o programa escolhe o prazo MAIS CURTO.
 
@@ -26,7 +26,7 @@ FERIADOS_FIXOS = {
     (12, 25): "Natal (Lei 662/1949)",
 }
 DIAS_SEMANA = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
-RECESSO_PADRAO = {"ativo": True, "inicio": "12-20", "fim": "01-20"}
+RECESSO_PADRAO = {"ativo": True, "inicio": "12-20", "fim": "01-19"}
 MAX_DIAS = 400
 AVISO = ("Ferramenta de apoio: NÃO substitui a conferência nos portais do tribunal nem a análise do advogado. "
          "Considera apenas feriados nacionais (e os extras cadastrados em Configurações). Não considera feriados estaduais ou municipais, "

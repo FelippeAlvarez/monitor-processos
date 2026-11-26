@@ -647,10 +647,10 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <b>não entram sozinhos</b>: cadastre aqui os que quiser considerar (isso pode alongar o prazo calculado).</p>
     <label for="z-extras">Feriados extras — um por linha: AAAA-MM-DD nome (ex.: 2027-02-09 Carnaval)</label>
     <textarea id="z-extras" rows="4" style="width:100%"></textarea>
-    <label><input type="checkbox" id="z-rec" style="width:auto"> Considerar o recesso de fim de ano (CPC art. 220: de 20/12 a 20/01, inclusive)</label>
+    <label><input type="checkbox" id="z-rec" style="width:auto"> Considerar o recesso de fim de ano (padrão do escritório: de 20/12 a 19/01, inclusive; o CPC art. 220 fala em 20/01)</label>
     <div class="grid2">
       <div><label for="z-ini">Início do recesso (MM-DD)</label><input id="z-ini" maxlength="5" placeholder="12-20"></div>
-      <div><label for="z-fim">Fim do recesso (MM-DD, inclusive)</label><input id="z-fim" maxlength="5" placeholder="01-20"></div>
+      <div><label for="z-fim">Fim do recesso (MM-DD, inclusive)</label><input id="z-fim" maxlength="5" placeholder="01-19"></div>
     </div>
   </div>
   <div class="card">
@@ -1820,7 +1820,7 @@ async function carregarConfig() {
   const v = c.varredura; $("#v-ativa").checked = v.ativa; $("#v-bloco").value = v.bloco; $("#v-int").value = v.intervalo_min; $("#v-ini").value = v.inicio;
   capacidade();
   $("#m-auto").checked = c.monitoramento.auto_sem_oab; $("#m-dias").value = c.monitoramento.auto_dias;
-  const pz = c.prazos || { feriados_extras: [], recesso: { ativo: true, inicio: "12-20", fim: "01-20" } };
+  const pz = c.prazos || { feriados_extras: [], recesso: { ativo: true, inicio: "12-20", fim: "01-19" } };
   $("#z-extras").value = (pz.feriados_extras || []).join("\n"); $("#z-rec").checked = pz.recesso.ativo; $("#z-ini").value = pz.recesso.inicio; $("#z-fim").value = pz.recesso.fim;
   $("#jn-ativa").checked = c.janela_propria !== false;
   const ag = c.agenda || { email_ativo: true, hora: "07:00", geral_recebe_tudo: true };

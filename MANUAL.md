@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.5)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.6)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -263,7 +263,7 @@ d) Calcular prazo (botão no cartão da publicação). Você informa a data de d
    § 2º (publicação = 1º dia útil seguinte à disponibilização) e § 3º (contagem começa no 1º dia útil seguinte à publicação); Lei 11.419/2006 art. 4º, §§ 3º e 4º;
    CPC art. 220 (suspensão de 20/12 a 20/01, INCLUSIVE). Feriados nacionais: Lei 662/1949 (1/1, 21/4, 1/5, 7/9, 2/11, 15/11, 25/12), Lei 6.802/1980 (12/10) e
    Lei 14.759/2023 (20/11).
-   ATENÇÃO: o recesso está padronizado em 20/01 (texto do CPC). Se o seu entendimento é 19/01, ajuste em Configurações > Cálculo de prazo.
+   ATENÇÃO: o recesso está padronizado em 20/12 a 19/01, inclusive (decisão do escritório em 26/11/2026; o texto do CPC art. 220 vai até 20/01, então o padrão dá prazo MAIS CURTO, o lado seguro). 20/01 conta como dia útil, pois só se consideram feriados nacionais (o feriado de 20/01 é só do município do Rio). Para seguir o texto da lei, ajuste em Configurações > Cálculo de prazo.
    Interpretação adotada (não escrita na lei): a data da publicação usa dias úteis comuns; o recesso só suspende a CONTAGEM.
    NÃO considera: feriados estaduais/municipais, Carnaval, Semana Santa e Corpus Christi (só se cadastrados em Configurações > Feriados extras), suspensões
    ou prorrogações por ato do tribunal, indisponibilidade do sistema, prazo em dobro ou diferenciado. Na dúvida o programa escolhe o prazo mais curto.
@@ -394,3 +394,16 @@ Limites e cuidados:
 - A pesquisa para após ~150 segundos ou 20 páginas e avisa que o resultado foi truncado: reduza o período.
 - Só uma pesquisa por vez.
 - O DJEN só traz o que foi publicado: partes que nunca constaram em publicação não são encontradas.
+
+
+34. RECESSO FORENSE E ROTEIRO (v0.7.6)
+
+Recesso: o padrão passou a ser 20/12 a 19/01, inclusive (decisão do escritório, 26/11/2026). O texto do CPC, art. 220, vai até 20/01, inclusive; o padrão do programa é mais curto de propósito (na dúvida, prazo mais curto). O dia 20/01 conta como dia útil, pois só entram feriados nacionais.
+Quem já salvou a configuração antiga: Configurações > Cálculo de prazo > "Fim do recesso" = 01-19, e salvar. A mudança de padrão só vale para instalações novas.
+
+Roteiro (servidor continua LOCAL, no PC do escritório):
+  v0.8   painel de gestão
+  v0.9   segurança: 2FA, limite de tentativas de login, backup automático
+  depois perfil/portal do cliente; IA local; CPF/CNPJ por cliente na análise de penhora
+  PWA (ícone no menu Iniciar) e início automático com o Windows (pasta Inicializar): quando o programa passar a rodar em um computador fixo do escritório.
+Observação: o PWA só abre a janela; o servidor Python precisa estar ligado (hoje, pelo iniciar.bat).
