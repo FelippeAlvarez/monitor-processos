@@ -598,7 +598,8 @@ class Banco:
 
     def oab_publicacoes(self, oid=None, so_novas=False, limite=300):
         sql = ("SELECT b.*, o.numero AS oab_numero, o.uf AS oab_uf, o.tipo AS filtro_tipo, o.rotulo AS oab_rotulo, "
-               "EXISTS(SELECT 1 FROM processos p WHERE p.numero_limpo=b.numero_processo) AS cadastrado "
+               "EXISTS(SELECT 1 FROM processos p WHERE p.numero_limpo=b.numero_processo) AS cadastrado, "
+               "(SELECT p.id FROM processos p WHERE p.numero_limpo=b.numero_processo) AS processo_id "
                "FROM oab_pubs b JOIN oabs o ON o.id=b.oab_id WHERE 1=1")
         args = []
         if oid is not None:
@@ -695,7 +696,7 @@ class Banco:
     def descobertos(self, oid):
         info = self._linhas("SELECT * FROM descoberta_exec WHERE oab_id=?", (oid,))
         itens = self._linhas("""
-            SELECT d.*, CASE WHEN p.id IS NULL THEN 'novo' WHEN p.ativo=1 THEN 'cadastrado' ELSE 'arquivado' END AS situacao
+            SELECT d.*, p.id AS processo_id, CASE WHEN p.id IS NULL THEN 'novo' WHEN p.ativo=1 THEN 'cadastrado' ELSE 'arquivado' END AS situacao
             FROM descobertos d LEFT JOIN processos p ON p.numero_limpo=d.numero_limpo
             WHERE d.oab_id=? ORDER BY d.ultima_data DESC, d.numero""", (oid,))
         return {"info": info[0] if info else None, "itens": itens}

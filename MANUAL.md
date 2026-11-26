@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.8.0)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.8.1)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -425,3 +425,10 @@ Limites e cuidados:
 - Compromissos da agenda sem responsável aparecem em "(sem responsável)".
 - A classe e o tribunal vêm do DataJud: processos ainda não consultados aparecem como "(sem classe)".
 - O número de "disponibilizadas hoje" fica zero em fins de semana e feriados, pois o DJEN só publica em dias úteis.
+
+
+36. NÚMERO DO PROCESSO COMO LINK (v0.8.1)
+
+Em todas as abas, o número do processo (em azul, com pontilhado) é um link: clicar nele abre a aba Histórico já com aquele processo.
+Onde: Início (andamentos novos), Processos, Publicações, Calendário (lista de compromissos), Risco de penhora, Filtros (publicações e processos descobertos, quando o processo já está cadastrado), pesquisa no DJEN (quando cadastrado) e Gestão (processos parados).
+Não vira link: número de processo ainda não cadastrado (não há histórico para abrir) e números dentro de janelas de edição.

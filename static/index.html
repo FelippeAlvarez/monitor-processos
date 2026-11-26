@@ -70,6 +70,7 @@
   th, td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--bd); vertical-align:top; }
   th { color:var(--mut); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
   tbody tr:hover td { background:color-mix(in srgb,var(--ac) 4%,transparent); }
+  a.plink { color:var(--ac); text-decoration:none; border-bottom:1px dotted currentColor; cursor:pointer; } a.plink:hover { text-decoration:underline; border-bottom-color:transparent; }
   .badge { display:inline-block; background:var(--new); color:#fff; border-radius:10px; padding:0 8px; font-size:12px; font-weight:600; }
   .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--err); } .mut { color:var(--mut); font-size:13px; }
   .st { display:inline-block; padding:1px 10px; border-radius:99px; font-size:12.5px; font-weight:500; background:color-mix(in srgb,var(--mut) 14%,transparent); }
@@ -826,6 +827,12 @@ function irPara(aba, filtro) {
   document.querySelector(`#nav button[data-t="${aba}"]`).click();
   if (aba === "painel" && filtro) { $("#f-sit").value = filtro; renderLista(); }
 }
+// número do processo como link para a aba Histórico (v0.8.1)
+function linkProc(pid, numero) { return pid ? `<a href="#" class="plink" data-plink="${pid}" title="Abrir o histórico deste processo">${esc(numero)}</a>` : esc(numero); }
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("[data-plink]"); if (!a) return;
+  e.preventDefault(); e.stopImmediatePropagation(); abrirHistorico(Number(a.dataset.plink));
+}, true);
 function nomeProc(x) { return esc(x.apelido || x.cliente || x.numero); }
 function serieSvg(serie) {
   const W = 560, H = 176, pb = 22, pt = 16, px = 16, n = serie.length, max = Math.max(1, ...serie.flatMap(x => [x.movimentos, x.publicacoes]));
@@ -876,7 +883,7 @@ async function carregarDashboard() {
   $("#i-sit").innerHTML = `<div class="brr"><span class="tr" style="height:14px">${["nova", "analise", "tratada"].map(k => `<i style="width:${100 * pb.situacao[k] / tot}%;background:${SIT_COR[k]};height:14px" title="${SIT_ROT[k]}: ${pb.situacao[k]}"></i>`).join("")}</span></div>` +
     `<div style="font-size:13.5px">${["nova", "analise", "tratada"].map(k => `<span class="lg-pt" style="background:${SIT_COR[k]};margin-left:0;margin-right:4px"></span>${SIT_ROT[k]}: <b>${pb.situacao[k]}</b>`).join(" &nbsp; ")}</div>`;
   $("#i-trib").innerHTML = barras(d.tribunais.map(t => ({ rot: t.alias.toUpperCase(), v: t.total })), "var(--ac)");
-  $("#i-mov").innerHTML = d.ultimas_movimentacoes.length ? `<ul class="lst">${d.ultimas_movimentacoes.map(x => `<li data-mov="${x.pid}"><div class="t"><b>${nomeProc(x)}</b><span class="mut">${fmt(x.data_hora)}</span></div><div>${esc(x.nome)}</div><div class="mut num">${esc(x.numero)}</div></li>`).join("")}</ul>` : '<p class="mut">Nenhum andamento novo.</p>';
+  $("#i-mov").innerHTML = d.ultimas_movimentacoes.length ? `<ul class="lst">${d.ultimas_movimentacoes.map(x => `<li data-mov="${x.pid}"><div class="t"><b>${nomeProc(x)}</b><span class="mut">${fmt(x.data_hora)}</span></div><div>${esc(x.nome)}</div><div class="mut num">${linkProc(x.pid, x.numero)}</div></li>`).join("")}</ul>` : '<p class="mut">Nenhum andamento novo.</p>';
   $("#i-pub").innerHTML = d.ultimas_publicacoes.length ? `<ul class="lst">${d.ultimas_publicacoes.map(x => `<li data-pub="1"><div class="t"><b>${nomeProc(x)}${x.copias > 1 ? ` <span class="mut">×${x.copias}</span>` : ""}</b><span class="mut">${fmt(x.data_disp)}</span></div><div class="mut">${esc(x.tipo_com)} · ${esc(x.orgao)}${x.responsavel_nome ? " · " + esc(x.responsavel_nome) : ""}</div><div>${esc(x.trecho)}${x.trecho.length >= 170 ? "…" : ""}</div></li>`).join("")}</ul>` : '<p class="mut">Nenhuma publicação nova.</p>';
   $("#i-resp").innerHTML = d.responsaveis.length ? `<table class="mini"><tr><th>Responsável</th><th class="n">Processos</th><th class="n">Publ. novas</th></tr>${d.responsaveis.map(r => `<tr><td>${esc(r.nome)}</td><td class="n">${r.processos}</td><td class="n">${r.pubs_novas ? `<b>${r.pubs_novas}</b>` : 0}</td></tr>`).join("")}</table>` : '<p class="mut">Sem processos monitorados.</p>';
   const aten = [];
@@ -981,7 +988,7 @@ function desenharLista() {
   const hoje = hojeIso(); let ult = "", h = '<div class="cal-lista">';
   CAL.eventos.forEach(e => {
     if (e.data !== ult) { ult = e.data; const inf = CAL.dias[e.data]; h += `<div class="dia ${e.data < hoje ? "atr" : ""}">${dataExtenso(e.data)}${e.data === hoje ? " — hoje" : ""}${inf && inf.feriado ? ` <span class="warn">· ${esc(inf.feriado)}</span>` : ""}${inf && inf.recesso && !inf.feriado ? ' <span class="mut">· recesso</span>' : ""}</div>`; }
-    const proc = e.processo_numero ? `${esc(e.processo_apelido || e.processo_cliente || "")} <span class="mut">${esc(e.processo_numero)}</span>` : '<span class="mut">sem processo</span>';
+    const proc = e.processo_numero ? `${esc(e.processo_apelido || e.processo_cliente || "")} <span class="mut">${linkProc(e.processo_id, e.processo_numero)}</span>` : '<span class="mut">sem processo</span>';
     h += `<div class="it ${e.situacao !== "aberto" ? e.situacao : ""}" data-ev="${e.id}" style="--c:${e.tipo_cor}"><span class="h">${e.hora || "—"}</span><span class="t"><b class="${e.atrasado ? "err" : ""}">${esc(e.titulo)}</b> <span class="st">${esc(e.tipo_nome)}</span>${e.situacao !== "aberto" ? ` <span class="st ${e.situacao === "concluido" ? "ok" : ""}">${e.situacao === "concluido" ? "concluído" : "cancelado"}</span>` : ""}${e.atrasado ? ' <span class="st err">vencido</span>' : ""}<br><span class="mut">${proc}${e.responsavel_nome ? " · " + esc(e.responsavel_nome) : ""}${e.local ? " · " + esc(e.local) : ""}</span></span></div>`;
   });
   $("#cal-corpo").innerHTML = h + "</div>" + (CAL.eventos.length >= 1000 ? '<p class="warn">Mostrando só os primeiros 1000 eventos; refine os filtros.</p>' : "");
@@ -1200,7 +1207,7 @@ function cartaoPenhora(x) {
   const nome = esc(x.apelido || x.cliente || x.numero), pos = x.posicao === "executado" ? "cliente EXECUTADO" : "cliente EXEQUENTE";
   const pz = x.prazo ? `<div class="mut">Prazo de pagamento (aprox.): <b>${dataBr(x.prazo.vencimento)}</b> — ${esc(x.prazo.base)} (${esc(x.prazo.artigo)})</div>` : "";
   const sg = x.sinais.filter(s => s.data).map(s => `<li><b>${dataBr(s.data)}</b> · ${esc(s.nome)} <span class="mut">(${s.fonte === "publicacao" ? "DJEN" : "DataJud"})</span><br><span class="mut">${esc(s.trecho)}</span></li>`).join("");
-  return `<div class="pn ${x.grau}" data-pn="${x.processo_id}"><div class="acoes" style="justify-content:space-between;align-items:center"><div><span class="rk ${x.grau}">${GRAU_ROT[x.grau] || x.grau}</span> <b>${nome}</b> <span class="mut">· ${pos}${x.cliente && x.apelido ? " · " + esc(x.cliente) : ""}</span><br><span class="mut" style="font-family:monospace">${esc(x.numero)}</span></div>
+  return `<div class="pn ${x.grau}" data-pn="${x.processo_id}"><div class="acoes" style="justify-content:space-between;align-items:center"><div><span class="rk ${x.grau}">${GRAU_ROT[x.grau] || x.grau}</span> <b>${nome}</b> <span class="mut">· ${pos}${x.cliente && x.apelido ? " · " + esc(x.cliente) : ""}</span><br><span class="mut" style="font-family:monospace">${linkProc(x.processo_id, x.numero)}</span></div>
     <div class="acoes"><button class="b sm sec" data-pn-h type="button">Histórico</button><button class="b sm sec" data-pn-ag type="button">Agendar</button><button class="b sm sec" data-pn-x type="button">Remover da análise</button></div></div>
     <div style="margin-top:4px">${esc(x.rotulo)}</div>${pz}
     ${x.sugestoes.length ? `<ul>${x.sugestoes.map(s => `<li>${esc(s)}</li>`).join("")}</ul>` : ""}
@@ -1282,7 +1289,7 @@ async function carregarGestao() {
     (al.oabs_com_erro.length ? `<b style="display:block;margin-top:12px;font-size:13.5px">Filtros com erro</b>${al.oabs_com_erro.map(o => `<div class="mut">${esc(o.oab)} ${esc(o.rotulo || "")} — ${esc(o.mensagem)}</div>`).join("")}` : "");
   $("#g-par-leg").textContent = `(${pa.total} processo(s)${pa.total > pa.lista.length ? ", mostrando os " + pa.lista.length + " mais antigos" : ""})`;
   $("#g-parados").innerHTML = `<tr><th>Processo</th><th>Cliente</th><th>Tribunal</th><th>Último movimento</th><th>Dias</th><th>Responsável</th></tr>` +
-    (pa.lista.map(x => `<tr data-mov="${x.id}" style="cursor:pointer"><td><b>${esc(x.apelido || x.cliente || x.numero)}</b>${x.apelido || x.cliente ? `<div class="mut num">${esc(x.numero)}</div>` : ""}</td><td>${esc(x.cliente)}</td><td>${esc(x.tribunal)}</td><td>${dataBr(x.ultimo)}</td><td class="num">${x.dias}</td><td>${esc(x.responsavel)}</td></tr>`).join("") || '<tr><td colspan="6" class="mut">Nenhum processo parado neste prazo.</td></tr>');
+    (pa.lista.map(x => `<tr data-mov="${x.id}" style="cursor:pointer"><td><b>${esc(x.apelido || x.cliente || x.numero)}</b>${x.apelido || x.cliente ? `<div class="mut num">${linkProc(x.id, x.numero)}</div>` : ""}</td><td>${esc(x.cliente)}</td><td>${esc(x.tribunal)}</td><td>${dataBr(x.ultimo)}</td><td class="num">${x.dias}</td><td>${esc(x.responsavel)}</td></tr>`).join("") || '<tr><td colspan="6" class="mut">Nenhum processo parado neste prazo.</td></tr>');
   $("#g-cli-n").textContent = `(${ca.n_clientes} cliente(s); os 15 maiores)`;
   $("#g-cli").innerHTML = barras(ca.por_cliente.map(x => ({ rot: x.nome, v: x.n })), "var(--ac)");
   $("#g-trib").innerHTML = barras(ca.por_tribunal.map(x => ({ rot: x.nome, v: x.n })), "var(--ac)");
@@ -1359,7 +1366,7 @@ function renderLista() {
     const avisoHtml = p.aviso ? `<div class="warn" style="font-size:13px;margin-top:4px">⚠ ${esc(p.aviso)} <button class="b sm sec" data-disp="${p.id}">Dispensar</button></div>` : "";
     return `<tr>
       <td>${p.apelido ? `<b>${esc(p.apelido)}</b> ` : ""}${p.ativo ? "" : '<span class="tag">arquivado</span> '}${mon}${p.novos ? `<span class="badge">${p.novos} mov. nova(s)</span> ` : ""}${p.pub_novas ? `<span class="badge">${p.pub_novas} publ. nova(s)</span> ` : ""}${p.pub_analise ? `<span class="tag">${p.pub_analise} em análise</span>` : ""}${p.apelido || !p.ativo || p.monitorar || p.novos || p.pub_novas || p.pub_analise ? "<br>" : ""}
-        <span class="num">${esc(p.numero)}</span>${p.motivo_obs ? ` <span class="mut">— ${esc(p.motivo_obs)}</span>` : ""}${p.dados_editados ? ' <span class="tag" title="Partes ou dados editados manualmente">editado</span>' : ""}<div class="qd">${htmlPartes(p)}</div>${htmlLocal(p) ? `<div class="mut">${htmlLocal(p)}</div>` : ""}${oab}${avisoHtml}${p.cliente || p.pasta ? `<br><span class="mut">${esc(p.cliente)}${p.pasta ? " · pasta " + esc(p.pasta) : ""}</span>` : ""}${p.responsavel_nome ? `<br><span class="mut">Responsável: ${esc(p.responsavel_nome)}</span>` : ""}</td>
+        <span class="num">${linkProc(p.id, p.numero)}</span>${p.motivo_obs ? ` <span class="mut">— ${esc(p.motivo_obs)}</span>` : ""}${p.dados_editados ? ' <span class="tag" title="Partes ou dados editados manualmente">editado</span>' : ""}<div class="qd">${htmlPartes(p)}</div>${htmlLocal(p) ? `<div class="mut">${htmlLocal(p)}</div>` : ""}${oab}${avisoHtml}${p.cliente || p.pasta ? `<br><span class="mut">${esc(p.cliente)}${p.pasta ? " · pasta " + esc(p.pasta) : ""}</span>` : ""}${p.responsavel_nome ? `<br><span class="mut">Responsável: ${esc(p.responsavel_nome)}</span>` : ""}</td>
       <td>${esc(p.ultimo_mov || "—")}<br><span class="mut">${fmt(p.ultimo_mov_data)}${p.classe ? " · " + esc(p.classe) : ""}</span>
         ${p.ultima_atualizacao ? `<br><span class="mut">registro do CNJ atualizado em ${fmt(p.ultima_atualizacao)}</span>` : ""}</td>
       <td><span class="st ${cls}">${txt}</span>${p.mensagem ? `<br><span class="mut">${esc(p.mensagem)}</span>` : ""}<br>${p.ultima_consulta ? `<br><span class="mut">consultado: ${fmtUtc(p.ultima_consulta)}</span>` : ""}
@@ -1586,7 +1593,7 @@ function renderPubs() {
     return `<div class="pub ${b.situacao === "nova" ? "n" : ""} ${b.cancelada ? "c" : ""}">
       <div class="acoes" style="justify-content:space-between"><span><b>${fmt(b.data_disp)}</b> · ${esc(b.tipo_com)}${b.tipo_doc ? " · " + esc(b.tipo_doc) : ""}
         ${copias}${b.cancelada ? '<span class="tag">cancelada/inativa</span>' : ""}</span>
-        <span class="num">${esc(b.numero)}</span></div>
+        <span class="num">${linkProc(b.processo_id, b.numero)}</span></div>
       <div class="qd">${htmlPartes(b)}</div>
       <div class="mut">${b.apelido ? esc(b.apelido) + " · " : ""}${[b.tipo_exib, b.vara_exib || b.orgao, b.comarca_exib].filter(Boolean).map(esc).join(" · ")}${b.responsavel_nome ? " · responsável: " + esc(b.responsavel_nome) : ""} <button class="b sm sec" data-pedit="${b.processo_id}" title="Corrigir partes, vara e demais dados do processo">Editar processo</button></div>
       ${dest ? `<div class="mut">Destinatários: ${dest}</div>` : ""}${advs ? `<div class="mut">Advogados: ${advs}</div>` : ""}${intim}
@@ -1658,7 +1665,7 @@ function pqMostrar(r) {
     const advs = lista(b.advogados).map(a => `${esc(a.nome)} (OAB ${esc(a.oab)})`).join("; ");
     const curto = (b.texto || "").length > 600;
     return `<div class="pub">
-      <div class="acoes" style="justify-content:space-between"><span><b>${fmt(b.data_disp)}</b> · ${esc(b.tribunal)} · ${esc(b.tipo_com)}${b.tipo_doc ? " · " + esc(b.tipo_doc) : ""}</span><span class="num">${esc(b.numero_fmt)}</span></div>
+      <div class="acoes" style="justify-content:space-between"><span><b>${fmt(b.data_disp)}</b> · ${esc(b.tribunal)} · ${esc(b.tipo_com)}${b.tipo_doc ? " · " + esc(b.tipo_doc) : ""}</span><span class="num">${linkProc(b.processo_id, b.numero_fmt)}</span></div>
       <div class="mut">${[b.classe && titulo(b.classe), b.orgao].filter(Boolean).map(esc).join(" · ")}</div>
       ${dest ? `<div class="mut">Destinatários: ${dest}</div>` : ""}${advs ? `<div class="mut">Advogados: ${advs}</div>` : ""}
       <div class="tx">${esc(curto ? b.texto.slice(0, 600) + "…" : b.texto)}</div>${curto ? `<details><summary class="mut">Texto completo</summary><div class="tx">${esc(b.texto)}</div></details>` : ""}
@@ -1763,7 +1770,7 @@ async function carregarOab() {
     return `<div class="pub ${b.visto ? "" : "n"} ${b.cancelada ? "c" : ""}">
       <div class="acoes" style="justify-content:space-between"><span><b>${fmt(b.data_disp)}</b> · ${esc(b.tipo_com)}${b.tipo_doc ? " · " + esc(b.tipo_doc) : ""}
         ${b.visto ? "" : '<span class="badge">nova</span>'} ${b.cancelada ? '<span class="tag">cancelada/inativa</span>' : ""}</span>
-        <span><span class="num">${esc(cnjMask(b.numero_processo))}</span> ${b.cadastrado ? '<span class="mut">(já cadastrado)</span>' : `<button class="b sm sec" data-cad="${esc(b.numero_processo)}">Cadastrar processo</button>`}</span></div>
+        <span><span class="num">${linkProc(b.processo_id, cnjMask(b.numero_processo))}</span> ${b.cadastrado ? '<span class="mut">(já cadastrado)</span>' : `<button class="b sm sec" data-cad="${esc(b.numero_processo)}">Cadastrar processo</button>`}</span></div>
       <div class="mut">${esc(b.tribunal)} · ${esc(b.orgao)}${b.classe ? " · " + esc(b.classe) : ""} · via ${esc(descFiltro(b.filtro_tipo, b.oab_numero, b.oab_uf))}</div>
       ${dest ? `<div class="mut">Destinatários: ${dest}</div>` : ""}${advs ? `<div class="mut">Advogados: ${advs}</div>` : ""}
       <div class="tx">${esc(b.texto)}</div></div>`;
@@ -1822,7 +1829,7 @@ async function verDescobertos(id) {
       <span class="mut">Aparecem processos com pelo menos uma publicação no período; processos já arquivados ou cadastrados são sinalizados.</span></div>
     <div style="overflow-x:auto;max-height:480px;overflow-y:auto"><table><thead><tr><th></th><th>Processo</th><th>Última publicação</th><th>Publ.</th><th>Situação</th></tr></thead><tbody>
     ${r.itens.map(x => `<tr><td><input type="checkbox" data-dn="${esc(x.numero)}" style="width:auto" ${x.situacao === "novo" ? "" : "disabled"}></td>
-      <td class="num">${esc(x.numero)}<br><span class="mut" style="font-family:inherit">${esc(x.tribunal)} · ${esc(x.classe)}</span></td>
+      <td class="num">${linkProc(x.processo_id, x.numero)}<br><span class="mut" style="font-family:inherit">${esc(x.tribunal)} · ${esc(x.classe)}</span></td>
       <td>${fmt(x.ultima_data)}<br><span class="mut">${esc(x.orgao)}</span></td><td>${x.n_pubs}</td>
       <td>${x.situacao === "novo" ? '<span class="warn">novo</span>' : x.situacao === "arquivado" ? '<span class="tag">arquivado</span>' : '<span class="ok">já cadastrado</span>'}</td></tr>`).join("")}
     </tbody></table></div>` : ""}`;
