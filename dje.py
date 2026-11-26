@@ -99,6 +99,12 @@ def _data_iso(item):
     return f"{m.group(3)}-{m.group(2)}-{m.group(1)}" if m else ""
 
 
+def _link_ok(v):
+    """Só aceita endereço http(s) (o campo vem de fora e vira href na tela)."""
+    t = str(v or "").strip()
+    return t[:500] if re.match(r"https?://[^\s<>\"']+$", t, re.I) else ""
+
+
 def normalizar_item(it):
     destinatarios = [{"nome": str(d.get("nome") or ""), "polo": str(d.get("polo") or "")}
                      for d in (it.get("destinatarios") or []) if isinstance(d, dict)]
@@ -120,6 +126,7 @@ def normalizar_item(it):
         "texto": limpar_texto(it.get("texto")),
         "meio": str(it.get("meiocompleto") or it.get("meio") or ""),
         "hash": str(it.get("hash") or ""),
+        "link": _link_ok(it.get("link")),
         "destinatarios": json.dumps(destinatarios, ensure_ascii=False),
         "advogados": json.dumps(advogados, ensure_ascii=False),
         "cancelada": 1 if cancelada else 0,
@@ -417,7 +424,7 @@ def pesquisar(filtros, base_url=BASE_URL, timeout=60, por_pagina=50, max_paginas
             brutos, trunc = _paginar(alt, base_url, timeout, por_pagina, max_paginas, rotulo, limite_seg)
     else:
         brutos, trunc = _paginar(base, base_url, timeout, por_pagina, max_paginas, rotulo, limite_seg)
-    links = {str(i.get("id")): str(i.get("link") or "") for i in brutos}
+    links = {str(i.get("id")): _link_ok(i.get("link")) for i in brutos}
     itens, descartados = [], 0
     for r in (normalizar_item(i) for i in brutos):
         if r["pub_id"] == "None":

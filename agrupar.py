@@ -73,6 +73,11 @@ def resumo_grupo(linhas):
             pass
     if len(linhas) > 1:   # várias cópias: mostra o texto comum (sem o bloco de intimados de uma só delas); os intimados vão à parte
         base["texto"] = texto_base(base.get("texto"))
+    for b in linhas:   # o link/hash de qualquer cópia serve para abrir o ato
+        if not base.get("link") and b.get("link"):
+            base["link"] = b["link"]
+        if not base.get("hash") and b.get("hash"):
+            base["hash"] = b["hash"]
     base["copias"] = len(linhas)
     base["ids"] = [b["id"] for b in linhas]
     base["intimados"] = intim

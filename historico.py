@@ -90,7 +90,7 @@ def linha(b, pid, fontes=None, de=None, ate=None, q="", antes=None, limite=40):
                           "texto": (m["complementos"] or "")[:TEXTO_MAX], "novo": not m["visto"], "grau": m["grau"]})
     if "publicacao" in fontes:
         sql, args = ["SELECT MIN(id) AS id, grupo, MAX(data_disp) AS data_disp, COUNT(*) AS copias, orgao, tipo_com, tipo_doc, classe, texto,"
-                     " situacao, MAX(cancelada) AS cancelada FROM publicacoes WHERE processo_id=? AND substr(data_disp,1,10)<=?"], \
+                     " situacao, MAX(cancelada) AS cancelada, MAX(link) AS link, MAX(hash) AS hash FROM publicacoes WHERE processo_id=? AND substr(data_disp,1,10)<=?"], \
                     [pid, cur[0][:10] if cur else (ate or "9999")]
         if de:
             sql.append("AND substr(data_disp,1,10)>=?"); args.append(de)
@@ -100,7 +100,8 @@ def linha(b, pid, fontes=None, de=None, ate=None, q="", antes=None, limite=40):
         for p in b._linhas(" ".join(sql), tuple(args)):
             itens.append({"fonte": "publicacao", "id": p["id"], "quando": (p["data_disp"] or "")[:10] + "T00:00:00",
                           "titulo": (p["tipo_com"] or "Publicação") + (f" — {p['orgao']}" if p["orgao"] else ""), "texto": re.sub(r"^Processo:\s*\S+\s*Conteudo:\s*", "", p["texto"] or "", flags=re.I)[:TEXTO_MAX],
-                          "copias": p["copias"], "situacao": p["situacao"], "cancelada": bool(p["cancelada"]), "classe": p["classe"]})
+                          "copias": p["copias"], "situacao": p["situacao"], "cancelada": bool(p["cancelada"]), "classe": p["classe"],
+                          "link": p["link"] or "", "hash": p["hash"] or ""})
     if "evento" in fontes:
         for e in b._linhas("SELECT e.*, t.nome AS tipo_nome, t.cor AS tipo_cor, "
                            "(SELECT u.nome FROM usuarios u WHERE u.id=e.responsavel_id) AS responsavel_nome "

@@ -8,6 +8,7 @@ Programa local (Windows/Linux/macOS, Python 3.9+, apenas biblioteca padrão) que
 - Painel em `http://127.0.0.1:8765`, alertas por e-mail opcionais, dados somente na máquina/servidor do escritório.
 - **Página inicial (v0.6.3)**: aba "Início" com cartões, gráfico dos últimos 14 dias, publicações por situação, tribunais, equipe e listas do que é novo (MANUAL, seção 27).
 - **Partes, edição e janela própria (v0.7.4)**: nomes das partes e parte contrária nas abas Processos e Publicações, edição de partes/advogados/vara/comarca/tipo de ação, busca por parte e abertura em janela de aplicativo (MANUAL, seção 32).
+- **Dados do processo no Histórico e link do ato (v0.8.2)**: quadro de partes, advogados, vara etc. no topo do Histórico; botão "Abrir no tribunal" nas publicações (MANUAL, seção 37).
 - **Número do processo como link (v0.8.1)**: em todas as abas, clicar no número abre o Histórico do processo (MANUAL, seção 36).
 - **Painel de gestão (v0.8.0)**: aba Gestão (só administrador): carga da equipe, carteira, processos parados, risco/alertas e publicações do DJEN (MANUAL, seção 35).
 - **Recesso padrão 20/12 a 19/01 (v0.7.6)**: decisão do escritório; o CPC art. 220 vai até 20/01 (MANUAL, seção 34).

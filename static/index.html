@@ -64,6 +64,9 @@
   button.b.dg { background:transparent; color:var(--err); border:1px solid color-mix(in srgb,var(--err) 45%,transparent); }
   button.b.dg:hover { background:color-mix(in srgb,var(--err) 10%,transparent); }
   button.b:disabled { opacity:.5; cursor:default; }
+  a.b { display:inline-block; background:var(--btn); color:#fff; border:1px solid var(--btn); border-radius:var(--rb); padding:8px 16px; cursor:pointer; font:inherit; text-decoration:none; }
+  a.b.sec { background:transparent; color:var(--ac); border:1px solid var(--bd); } a.b.sec:hover { background:color-mix(in srgb,var(--ac) 8%,transparent); border-color:var(--ac); }
+  a.b.sm { padding:3px 11px; font-size:13px; }
   button.sm { padding:3px 11px; font-size:13px; }
   /* tabelas e etiquetas */
   table { width:100%; border-collapse:collapse; }
@@ -71,6 +74,7 @@
   th { color:var(--mut); font-weight:600; font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
   tbody tr:hover td { background:color-mix(in srgb,var(--ac) 4%,transparent); }
   a.plink { color:var(--ac); text-decoration:none; border-bottom:1px dotted currentColor; cursor:pointer; } a.plink:hover { text-decoration:underline; border-bottom-color:transparent; }
+  .ddq .dl { display:flex; gap:10px; padding:3px 0; font-size:13.5px; } .ddq .dl .lc { flex:0 0 130px; color:var(--mut); } @media (max-width:640px) { .ddq .dl { flex-direction:column; gap:0; } .ddq .dl .lc { flex:none; } }
   .badge { display:inline-block; background:var(--new); color:#fff; border-radius:10px; padding:0 8px; font-size:12px; font-weight:600; }
   .ok { color:var(--ok); } .warn { color:var(--warn); } .err { color:var(--err); } .mut { color:var(--mut); font-size:13px; }
   .st { display:inline-block; padding:1px 10px; border-radius:99px; font-size:12.5px; font-weight:500; background:color-mix(in srgb,var(--mut) 14%,transparent); }
@@ -392,6 +396,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
   <div id="h-vazio" class="card mut">Escolha um processo para ver, numa só linha do tempo, os andamentos (DataJud), as publicações (DJEN), os compromissos da agenda e as anotações internas.</div>
   <div id="h-corpo" class="hide">
     <div class="card" id="h-cab"></div>
+    <div class="card" id="h-dados"></div>
     <div class="cal-bar" style="margin-top:10px">
       <div><label>Mostrar</label><div class="lemb" id="h-fontes"></div></div>
       <div><label for="h-de">De</label><input type="date" id="h-de"></div>
@@ -827,6 +832,33 @@ function irPara(aba, filtro) {
   document.querySelector(`#nav button[data-t="${aba}"]`).click();
   if (aba === "painel" && filtro) { $("#f-sit").value = filtro; renderLista(); }
 }
+// link do ato no tribunal (v0.8.2): `link` vem do DJEN; sem ele, a certidão do CNJ pelo hash (endereço não verificado pelo programa)
+function linkAto(b, cls = "b sm sec") {
+  const u = /^https?:\/\//i.test(b.link || "") ? b.link : "";
+  if (u) return `<a class="${cls}" href="${esc(u)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none" title="Abre o ato no site do tribunal">Abrir no tribunal</a>`;
+  if (/^[0-9A-Za-z]{6,64}$/.test(b.hash || "")) return `<a class="${cls}" href="https://comunicaapi.pje.jus.br/api/v1/comunicacao/${esc(b.hash)}/certidao" target="_blank" rel="noopener noreferrer" style="text-decoration:none" title="O tribunal não informou o endereço do ato; esta é a certidão da comunicação no CNJ (pode não abrir)">Certidão (CNJ)</a>`;
+  return "";
+}
+// quadro de dados do processo, no topo do Histórico (v0.8.2)
+function quadroDados(p) {
+  const r = p.resumo_partes || {}, nomes = (l) => (l || []).length ? l.map(esc).join("; ") : "";
+  const linha = (rot, v) => v ? `<div class="dl"><span class="lc">${rot}</span><span>${v}</span></div>` : "";
+  const parteTxt = (x) => esc(x.nome) + (x.polo ? ` <span class="mut">[${POLO_ROT[x.polo] || x.polo}]</span>` : "");
+  const cli = (p.partes || []).filter(x => x.lado === "cliente"), con = (p.partes || []).filter(x => x.lado === "contraria"), sem = (p.partes || []).filter(x => x.lado !== "cliente" && x.lado !== "contraria");
+  const adv = (p.advogados || []).map(a => `${esc(a.nome)}${a.oab ? ` <span class="mut">(OAB ${esc(a.oab)})</span>` : ""}${a.lado === "cliente" ? ' <span class="tag">nosso</span>' : ""}`).join("; ");
+  const mon = p.monitorar ? `monitorado${p.motivo ? " — " + esc(MOT[p.motivo] || p.motivo) : ""}${p.motivo_obs ? " (" + esc(p.motivo_obs) + ")" : ""}` : "não monitorado (sem consulta diária)";
+  const pos = p.posicao === "executado" ? "nosso cliente é EXECUTADO" : (p.posicao === "exequente" ? "nosso cliente é EXEQUENTE" : "");
+  return `<div class="acoes" style="justify-content:space-between;align-items:center"><b>Dados do processo</b><button class="b sm sec" type="button" data-hdados="${p.id}" title="Corrigir partes, vara, comarca, tipo de ação e advogados">Editar dados</button></div>
+    <div class="ddq">${linha("Nosso cliente", cli.length ? cli.map(parteTxt).join("; ") : (p.cliente ? esc(p.cliente) : ""))}
+    ${linha("Parte contrária", con.length ? con.map(parteTxt).join("; ") : '<span class="warn">não identificada (o DJEN só informa quem foi intimado)</span>')}
+    ${linha("Sem lado definido", sem.map(parteTxt).join("; "))}
+    ${linha("Advogados", adv)}
+    ${linha("Tipo de ação", esc(p.tipo_exib || ""))}${linha("Vara / órgão", esc(p.vara_exib || p.orgao || ""))}${linha("Comarca", esc(p.comarca_exib || ""))}
+    ${linha("Classe (DataJud)", esc(p.classe || ""))}${linha("Tribunal", esc(String(p.alias || "").replace("api_publica_", "").toUpperCase()))}
+    ${linha("Pasta", esc(p.pasta || ""))}${linha("Responsável", esc(p.responsavel_nome || "sem responsável"))}${linha("Penhora", pos)}${linha("Monitoramento", mon)}
+    ${linha("Última consulta", `DataJud: ${fmtUtc(p.ultima_consulta)} · DJEN: ${fmtUtc(p.dje_consulta)}`)}</div>
+    ${p.dados_editados ? '<div class="mut" style="font-size:12.5px;margin-top:4px">Há dados editados manualmente neste processo.</div>' : ""}`;
+}
 // número do processo como link para a aba Histórico (v0.8.1)
 function linkProc(pid, numero) { return pid ? `<a href="#" class="plink" data-plink="${pid}" title="Abrir o histórico deste processo">${esc(numero)}</a>` : esc(numero); }
 document.addEventListener("click", (e) => {
@@ -1144,6 +1176,7 @@ async function carregarHistorico(mais) {
     const p = d.processo, c = d.contagens;
     $("#h-cab").innerHTML = `<div class="acoes" style="justify-content:space-between"><div><b style="font-size:16px">${esc(p.apelido || p.cliente || p.numero)}</b><br><span class="mut" style="font-family:monospace">${esc(p.numero)}</span>${p.cliente ? ` · ${esc(p.cliente)}` : ""}${p.pasta ? ` · pasta ${esc(p.pasta)}` : ""}</div>
       <div class="hc"><span class="st">${c.andamento} andamento(s)</span><span class="st">${c.publicacao} publicação(ões)</span><span class="st">${c.evento} evento(s)</span><span class="st">${c.anotacao} anotação(ões)</span>${p.ativo ? "" : '<span class="st warn">arquivado</span>'}</div></div>`;
+    $("#h-dados").innerHTML = d.dados ? quadroDados(d.dados) : "";
     $("#h-fontes").innerHTML = Object.entries(FONTE_ROT).map(([k, [r]]) => `<label><input type="checkbox" value="${k}" ${HIST.fontes.has(k) ? "checked" : ""}>${r}</label>`).join("");
   } else HIST.itens = HIST.itens.concat(d.itens);
   HIST.proximo = d.proximo; $("#h-mais").classList.toggle("hide", !d.proximo);
@@ -1163,7 +1196,7 @@ function itemHist(x) {
   if (x.fonte === "evento") tx = `<div class="mut">${x.hora ? x.hora + " · " : ""}${x.responsavel_nome ? esc(x.responsavel_nome) : "sem responsável"}${x.local ? " · " + esc(x.local) : ""}</div>` + tx;
   let ac = "";
   if (x.fonte === "evento") ac = `<button class="b sm sec" data-hev="${x.id}" type="button">Abrir</button>`;
-  if (x.fonte === "publicacao") ac = `<button class="b sm sec" data-hag="${x.id}" type="button">Agendar prazo</button>`;
+  if (x.fonte === "publicacao") ac = `<button class="b sm sec" data-hag="${x.id}" type="button">Agendar prazo</button>${linkAto(x)}`;
   if (x.fonte === "anotacao" && (EU.perfil === "admin" || x.criado_por === EU.nome)) ac = `<button class="b sm sec" data-hane="${x.id}" type="button">Editar</button><button class="b sm dg" data-hand="${x.id}" type="button">Excluir</button>`;
   return `<div class="it ${x.fonte === "evento" && x.situacao !== "aberto" ? x.situacao : ""}" style="--c:${x.fonte === "evento" ? x.tipo_cor : cor}" data-k="${x.fonte}:${x.id}"><div class="cab">${cab}</div>${tx}${ac ? `<div class="acoes" style="margin-top:6px">${ac}</div>` : ""}</div>`;
 }
@@ -1173,6 +1206,7 @@ function desenharHistorico() {
   HIST.itens.forEach(x => { const m = x.quando.slice(0, 7); if (m !== mes) { mes = m; h += `<div class="tl-mes">${MESES[Number(m.slice(5)) - 1]} de ${m.slice(0, 4)}</div>`; } h += itemHist(x); });
   $("#h-lista").innerHTML = h;
 }
+$("#h-dados").onclick = (e) => { const b = e.target.closest("[data-hdados]"); if (b) abrirDados(Number(b.dataset.hdados)).catch(err => aviso(err.message)); };
 $("#h-lista").onclick = async (e) => {
   const b = e.target.closest("button"); if (!b) return; const it = HIST.itens.find(x => x.fonte + ":" + x.id === b.closest("[data-k]").dataset.k);
   if (b.dataset.exp !== undefined) { const t = b.closest(".it").querySelector("[data-tx]"); t.classList.toggle("cur"); b.textContent = t.classList.contains("cur") ? "Ler tudo" : "Recolher"; return; }
@@ -1568,7 +1602,7 @@ $("#dd-auto").onclick = async () => {
   if (!await confirmar("Descartar o que foi editado neste processo (partes, advogados, vara, comarca e tipo de ação) e voltar à leitura automática? Apelido, cliente e pasta não mudam.", { titulo: "Voltar ao automático", ok: "Descartar edições" })) return;
   try { await api(`/api/processos/${ED.pid}/dados/restaurar`, "POST", {}); dDados.close(); aviso("Voltou ao automático."); atualizarTelasDados(); } catch (err) { $("#dd-erro").textContent = err.message; }
 };
-function atualizarTelasDados() { carregarLista(); if (!$("#t-publicacoes").classList.contains("hide")) carregarPublicacoes(); }
+function atualizarTelasDados() { carregarLista(); if (!$("#t-historico").classList.contains("hide")) carregarHistorico(); if (!$("#t-publicacoes").classList.contains("hide")) carregarPublicacoes(); }
 
 // publicações
 function lista(json) { try { return JSON.parse(json || "[]"); } catch (e) { return []; } }
@@ -1600,7 +1634,7 @@ function renderPubs() {
       <div class="tx">${esc(b.texto)}</div>
       <div class="acoes" style="margin-top:8px"><label style="margin:0" for="ps-${i}">Situação</label>
         <select id="ps-${i}" data-sit="${i}">${Object.entries(SIT_PUB).map(([k, v]) => `<option value="${k}" ${k === b.situacao ? "selected" : ""}>${v}</option>`).join("")}</select>${quem}
-        <button class="b sm sec" data-prazo="${i}">Calcular prazo</button></div>
+        <button class="b sm sec" data-prazo="${i}">Calcular prazo</button>${linkAto(b)}</div>
       <div class="mut" style="margin-top:6px">${esc(b.meio)}</div></div>`;
   }).join("") : '<div class="card mut">Nenhuma publicação para exibir.</div>';
 }
@@ -1771,7 +1805,7 @@ async function carregarOab() {
       <div class="acoes" style="justify-content:space-between"><span><b>${fmt(b.data_disp)}</b> · ${esc(b.tipo_com)}${b.tipo_doc ? " · " + esc(b.tipo_doc) : ""}
         ${b.visto ? "" : '<span class="badge">nova</span>'} ${b.cancelada ? '<span class="tag">cancelada/inativa</span>' : ""}</span>
         <span><span class="num">${linkProc(b.processo_id, cnjMask(b.numero_processo))}</span> ${b.cadastrado ? '<span class="mut">(já cadastrado)</span>' : `<button class="b sm sec" data-cad="${esc(b.numero_processo)}">Cadastrar processo</button>`}</span></div>
-      <div class="mut">${esc(b.tribunal)} · ${esc(b.orgao)}${b.classe ? " · " + esc(b.classe) : ""} · via ${esc(descFiltro(b.filtro_tipo, b.oab_numero, b.oab_uf))}</div>
+      <div class="mut">${esc(b.tribunal)} · ${esc(b.orgao)}${b.classe ? " · " + esc(b.classe) : ""} · via ${esc(descFiltro(b.filtro_tipo, b.oab_numero, b.oab_uf))} ${linkAto(b, "b sm sec")}</div>
       ${dest ? `<div class="mut">Destinatários: ${dest}</div>` : ""}${advs ? `<div class="mut">Advogados: ${advs}</div>` : ""}
       <div class="tx">${esc(b.texto)}</div></div>`;
   }).join("") : '<div class="card mut">Nenhuma publicação para exibir.</div>';

@@ -177,6 +177,15 @@ class Banco:
         historico.migrar(self)
         risco.migrar(self)
         partes.migrar(self)
+        self._migrar_link()
+
+    def _migrar_link(self):
+        """v0.8.2: endereço do ato no tribunal (campo `link` da API do DJEN), guardado para abrir com um clique."""
+        for tabela in ("publicacoes", "oab_pubs"):
+            cols = {r["name"] for r in self.conn.execute(f"PRAGMA table_info({tabela})").fetchall()}
+            if "link" not in cols:
+                self.conn.execute(f"ALTER TABLE {tabela} ADD COLUMN link TEXT NOT NULL DEFAULT ''")
+        self.conn.commit()
 
     def _migrar(self):
         """v0.1.1: 'baseline_feito' registra se a 1ª consulta bem-sucedida já ocorreu.
@@ -366,10 +375,11 @@ class Banco:
                 existe = self.conn.execute("SELECT 1 FROM publicacoes WHERE processo_id=? AND pub_id=?",
                                            (pid, it["pub_id"])).fetchone()
                 if existe:
-                    self.conn.execute("UPDATE publicacoes SET cancelada=?, texto=?, tipo_doc=?, orgao=?, hash=?, grupo=? "
+                    self.conn.execute("UPDATE publicacoes SET cancelada=?, texto=?, tipo_doc=?, orgao=?, hash=?, grupo=?, "
+                                      "link=CASE WHEN ?<>'' THEN ? ELSE link END "
                                       "WHERE processo_id=? AND pub_id=?",
                                       (it["cancelada"], it["texto"], it["tipo_doc"], it["orgao"], it["hash"], g,
-                                       pid, it["pub_id"]))
+                                       it.get("link", ""), it.get("link", ""), pid, it["pub_id"]))
                     continue
                 d = _data(it["data_disp"])
                 antiga = baseline and (d is None or (hoje - d).days > BASELINE_PUB_DIAS)
@@ -384,11 +394,11 @@ class Banco:
                     sit, por, em, visto = "nova", "", None, 0
                 self.conn.execute(
                     "INSERT INTO publicacoes(processo_id,pub_id,data_disp,tipo_com,orgao,tipo_doc,classe,texto,meio,"
-                    "hash,destinatarios,advogados,cancelada,visto,detectado_em,situacao,situacao_por,situacao_em,grupo) "
-                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "hash,destinatarios,advogados,cancelada,visto,detectado_em,situacao,situacao_por,situacao_em,grupo,link) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (pid, it["pub_id"], it["data_disp"], it["tipo_com"], it["orgao"], it["tipo_doc"], it["classe"],
                      it["texto"], it["meio"], it["hash"], it["destinatarios"], it["advogados"], it["cancelada"],
-                     visto, agora(), sit, por, em, g))
+                     visto, agora(), sit, por, em, g, it.get("link", "")))
                 if irma:
                     if g in grupos_novos:
                         grupos_novos[g]["copias"] = grupos_novos[g].get("copias", 1) + 1
@@ -558,8 +568,9 @@ class Banco:
                     continue
                 if self.conn.execute("SELECT 1 FROM oab_pubs WHERE oab_id=? AND pub_id=?",
                                      (oid, it["pub_id"])).fetchone():
-                    self.conn.execute("UPDATE oab_pubs SET cancelada=?, texto=? WHERE oab_id=? AND pub_id=?",
-                                      (it["cancelada"], it["texto"], oid, it["pub_id"]))
+                    self.conn.execute("UPDATE oab_pubs SET cancelada=?, texto=?, link=CASE WHEN ?<>'' THEN ? ELSE link END "
+                                      "WHERE oab_id=? AND pub_id=?",
+                                      (it["cancelada"], it["texto"], it.get("link", ""), it.get("link", ""), oid, it["pub_id"]))
                     continue
                 chave = (it["numero"], it["data_disp"], " ".join(it["texto"].split()))
                 duplicada = chave in vistos_lote or self.conn.execute(
@@ -568,11 +579,11 @@ class Banco:
                 vistos_lote.add(chave)
                 self.conn.execute(
                     "INSERT INTO oab_pubs(oab_id,pub_id,numero_processo,tribunal,data_disp,tipo_com,orgao,tipo_doc,"
-                    "classe,texto,meio,destinatarios,advogados,cancelada,visto,detectado_em) "
-                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "classe,texto,meio,destinatarios,advogados,cancelada,visto,detectado_em,link) "
+                    "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (oid, it["pub_id"], it["numero"], it["tribunal"], it["data_disp"], it["tipo_com"], it["orgao"],
                      it["tipo_doc"], it["classe"], it["texto"], it["meio"], it["destinatarios"], it["advogados"],
-                     it["cancelada"], 1 if duplicada else 0, agora()))
+                     it["cancelada"], 1 if duplicada else 0, agora(), it.get("link", "")))
                 if not duplicada and not it["cancelada"]:
                     novas.append(it)
             self.conn.commit()
@@ -589,11 +600,11 @@ class Banco:
             else ("nova", "", None, 0)
         cur = self.conn.execute(
             "INSERT OR IGNORE INTO publicacoes(processo_id,pub_id,data_disp,tipo_com,orgao,tipo_doc,classe,texto,meio,hash,"
-            "destinatarios,advogados,cancelada,visto,detectado_em,situacao,situacao_por,situacao_em,grupo) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            "destinatarios,advogados,cancelada,visto,detectado_em,situacao,situacao_por,situacao_em,grupo,link) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (pid, it["pub_id"], it["data_disp"], it["tipo_com"], it["orgao"], it["tipo_doc"], it["classe"], it["texto"],
              it["meio"], it.get("hash", ""), it["destinatarios"], it.get("advogados", "[]"), it["cancelada"], visto,
-             agora(), sit, por, em, g))
+             agora(), sit, por, em, g, it.get("link", "")))
         return cur.rowcount > 0 and irma is None
 
     def oab_publicacoes(self, oid=None, so_novas=False, limite=300):

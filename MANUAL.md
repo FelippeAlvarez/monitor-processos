@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.8.1)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.8.2)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -432,3 +432,12 @@ Limites e cuidados:
 Em todas as abas, o número do processo (em azul, com pontilhado) é um link: clicar nele abre a aba Histórico já com aquele processo.
 Onde: Início (andamentos novos), Processos, Publicações, Calendário (lista de compromissos), Risco de penhora, Filtros (publicações e processos descobertos, quando o processo já está cadastrado), pesquisa no DJEN (quando cadastrado) e Gestão (processos parados).
 Não vira link: número de processo ainda não cadastrado (não há histórico para abrir) e números dentro de janelas de edição.
+
+
+37. DADOS DO PROCESSO NO HISTÓRICO E LINK DO ATO (v0.8.2)
+
+Quadro "Dados do processo" (topo da aba Histórico, antes da linha do tempo): nosso cliente, parte contrária, partes sem lado definido, advogados (com OAB; "nosso" marca os da equipe), tipo de ação, vara/órgão, comarca, classe (DataJud), tribunal, pasta, responsável, situação de penhora (se marcada), monitoramento e datas da última consulta. O botão "Editar dados" abre a mesma janela de edição da aba Processos; ao salvar, o quadro é atualizado.
+Link do ato: cada publicação ganhou o botão "Abrir no tribunal" (abre o endereço do ato informado pelo DJEN). Aparece em Publicações, no Histórico e em Filtros.
+- Esse endereço só passa a ser guardado a partir desta versão. Publicações antigas ganham o link na PRÓXIMA consulta do DJEN do processo (botão de consulta ou varredura diária), se o DJEN o informar.
+- O DJEN nem sempre informa o endereço. Quando não informa, e a publicação tem o código (hash) da comunicação, aparece "Certidão (CNJ)": é o endereço da certidão no servidor do CNJ. ATENÇÃO: o programa não conseguiu verificar esse endereço contra o servidor real; se não abrir, avise para corrigirmos.
+- Só são aceitos endereços que começam com http:// ou https://.

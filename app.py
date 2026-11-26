@@ -347,6 +347,16 @@ def _pid_ok(h, pid):
     return p
 
 
+def _dados_quadro(p):
+    """v0.8.2: quadro 'Dados do processo' do Histórico (partes, advogados, vara, comarca, tipo de ação, situação do monitoramento)."""
+    d = {k: p.get(k) for k in ("id", "numero", "apelido", "cliente", "pasta", "alias", "classe", "orgao", "vara", "comarca", "tipo_acao",
+                               "monitorar", "motivo", "motivo_obs", "posicao", "ultima_consulta", "dje_consulta", "ultima_atualizacao",
+                               "status", "dje_status", "criado_em", "responsavel_id")}
+    u = CTX.banco._linhas("SELECT nome FROM usuarios WHERE id=?", (p.get("responsavel_id"),)) if p.get("responsavel_id") else []
+    d["responsavel_nome"] = u[0]["nome"] if u else ""
+    return partes.enriquecer(CTX.banco, [d])[0]
+
+
 def r_historico(h, pid):
     """v0.7.1: linha do tempo única do processo (andamentos, publicações, eventos, anotações), paginada."""
     p = _pid_ok(h, pid)
@@ -364,6 +374,7 @@ def r_historico(h, pid):
     if not g("antes"):
         out["processo"] = {k: p.get(k) for k in ("id", "numero", "apelido", "cliente", "pasta", "alias", "status", "ativo", "monitorar", "responsavel_id", "ultima_consulta")}
         out["contagens"] = historico.contagens(CTX.banco, int(pid))
+        out["dados"] = _dados_quadro(p)
     h.json(out)
 
 
