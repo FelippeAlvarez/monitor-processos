@@ -168,6 +168,11 @@
   @media (max-width:640px){ .pt-lin,.pt-lin.adv { grid-template-columns:1fr 1fr 40px; } .pt-lin > input:first-child { grid-column:1 / -1; } .pt-lin.adv > input:nth-child(2) { grid-column:1 / 3; } .pt-cab,.pt-cab.adv { display:none; } .ddgrid { grid-template-columns:1fr; } }
   dialog::backdrop { background:rgba(10,15,25,.55); }
   #d-conf p { white-space:pre-wrap; margin:0 0 12px; }
+  #undo { position:fixed; bottom:16px; left:16px; background:var(--tx); color:var(--bg); padding:10px 14px; border-radius:10px; max-width:420px; display:none; box-shadow:0 8px 24px rgba(10,15,35,.3); z-index:50; }
+  #undo button { margin-left:10px; background:var(--bg); color:var(--tx); border-color:var(--bg); }
+  .selbar { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:8px 10px; margin-bottom:10px; border:1px solid var(--gold); border-radius:10px; background:color-mix(in srgb,var(--gold) 10%,transparent); }
+  .pn-sel { font-size:12.5px; padding:3px 6px; }
+  .sg { display:flex; gap:8px; flex-wrap:wrap; align-items:center; justify-content:space-between; padding:6px 0; border-top:1px solid var(--bd); }
   #msg { position:fixed; bottom:16px; right:16px; background:var(--tx); color:var(--bg); padding:10px 14px; border-radius:10px; max-width:380px; display:none; box-shadow:0 8px 24px rgba(10,15,35,.3); }
   /* tela Aparência */
   .opts { display:grid; grid-template-columns:1fr 1fr; gap:14px; } @media (max-width:640px) { .opts { grid-template-columns:1fr; } }
@@ -421,6 +426,17 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
       <button class="b" id="pn-add" type="button">Incluir / alterar</button>
     </div>
   </div>
+  <div class="card" style="margin-top:10px">
+    <b>Marcar vários de uma vez</b> <span class="mut">— cole os números dos processos (um por linha, com ou sem pontuação). Também dá para marcar vários pela aba Processos, com as caixas de seleção.</span>
+    <textarea id="pn-nums" rows="3" style="width:100%;margin-top:6px" placeholder="0000001-00.2024.8.19.0001&#10;00000020020248190002"></textarea>
+    <div class="cal-bar" style="margin-top:6px"><div><label for="pn-nums-pos">Nosso cliente é</label><select id="pn-nums-pos"><option value="executado">Executado (devedor)</option><option value="exequente">Exequente (credor)</option><option value="">Tirar da análise</option></select></div>
+    <button class="b" id="pn-nums-ok" type="button">Aplicar aos números colados</button></div>
+  </div>
+  <div class="card" style="margin-top:10px">
+    <div class="acoes" style="justify-content:space-between;align-items:center"><b>Sugestões</b> <button class="b sm sec" id="sg-atualizar" type="button">Atualizar</button></div>
+    <div class="mut" id="sg-resumo" style="margin:4px 0">Processos de execução ou cumprimento ainda sem marcação. A sugestão vem do lado do nosso cliente nas partes; nada é marcado sem o seu aceite.</div>
+    <div id="sg-lista"></div>
+  </div>
   <div class="cal-bar" style="margin-top:10px">
     <div><label for="pn-f-pos">Mostrar</label><select id="pn-f-pos"><option value="">Todos</option><option value="executado">Cliente executado</option><option value="exequente">Cliente exequente</option></select></div>
     <div style="flex:1;min-width:180px"><label for="pn-q">Texto</label><input id="pn-q" style="width:100%" placeholder="número, apelido ou cliente" autocomplete="off"></div>
@@ -485,8 +501,13 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <button class="b sec sm" id="b-inativos">Arquivar parados…</button>
     <button class="b sec sm" id="b-resp-lote">Definir responsável dos da lista…</button>
   </div>
+  <div class="selbar hide" id="sel-bar"><b id="sel-n"></b>
+    <button class="b sm" type="button" data-selpos="executado">Penhora: cliente executado</button>
+    <button class="b sm" type="button" data-selpos="exequente">Penhora: cliente exequente</button>
+    <button class="b sm sec" type="button" data-selpos="">Tirar da análise de penhora</button>
+    <button class="b sm sec" type="button" id="sel-limpar">Limpar seleção</button></div>
   <div class="card" style="padding:6px 10px; overflow-x:auto">
-    <table><thead><tr><th>Processo</th><th>Última movimentação</th><th>Situação / DJEN</th><th></th></tr></thead>
+    <table><thead><tr><th><input type="checkbox" id="sel-todos" title="Selecionar todos os processos da lista (inclusive os não exibidos por causa do limite)" aria-label="Selecionar todos da lista"> Processo</th><th>Última movimentação</th><th>Situação / DJEN</th><th></th></tr></thead>
     <tbody id="lista"></tbody></table>
     <p class="mut hide" id="vazio" style="padding:10px">Nenhum processo para mostrar. Use a aba “Adicionar” ou ajuste a busca/filtro.</p>
     <div class="acoes hide" id="mais-box" style="padding:8px"><button class="b sec sm" id="b-mais">Mostrar mais</button><span class="mut" id="mais-txt" style="align-self:center"></span></div>
@@ -763,6 +784,7 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
 </section>
 </main>
 <div id="msg"></div>
+<div id="undo" role="status"><span id="undo-txt"></span><button class="b sm sec" id="undo-btn" type="button">Desfazer</button></div>
 
 <script>
 const $ = (s) => document.querySelector(s);
@@ -847,7 +869,6 @@ function quadroDados(p) {
   const cli = (p.partes || []).filter(x => x.lado === "cliente"), con = (p.partes || []).filter(x => x.lado === "contraria"), sem = (p.partes || []).filter(x => x.lado !== "cliente" && x.lado !== "contraria");
   const adv = (p.advogados || []).map(a => `${esc(a.nome)}${a.oab ? ` <span class="mut">(OAB ${esc(a.oab)})</span>` : ""}${a.lado === "cliente" ? ' <span class="tag">nosso</span>' : ""}`).join("; ");
   const mon = p.monitorar ? `monitorado${p.motivo ? " — " + esc(MOT[p.motivo] || p.motivo) : ""}${p.motivo_obs ? " (" + esc(p.motivo_obs) + ")" : ""}` : "não monitorado (sem consulta diária)";
-  const pos = p.posicao === "executado" ? "nosso cliente é EXECUTADO" : (p.posicao === "exequente" ? "nosso cliente é EXEQUENTE" : "");
   return `<div class="acoes" style="justify-content:space-between;align-items:center"><b>Dados do processo</b><button class="b sm sec" type="button" data-hdados="${p.id}" title="Corrigir partes, vara, comarca, tipo de ação e advogados">Editar dados</button></div>
     <div class="ddq">${linha("Nosso cliente", cli.length ? cli.map(parteTxt).join("; ") : (p.cliente ? esc(p.cliente) : ""))}
     ${linha("Parte contrária", con.length ? con.map(parteTxt).join("; ") : '<span class="warn">não identificada (o DJEN só informa quem foi intimado)</span>')}
@@ -855,7 +876,7 @@ function quadroDados(p) {
     ${linha("Advogados", adv)}
     ${linha("Tipo de ação", esc(p.tipo_exib || ""))}${linha("Vara / órgão", esc(p.vara_exib || p.orgao || ""))}${linha("Comarca", esc(p.comarca_exib || ""))}
     ${linha("Classe (DataJud)", esc(p.classe || ""))}${linha("Tribunal", esc(String(p.alias || "").replace("api_publica_", "").toUpperCase()))}
-    ${linha("Pasta", esc(p.pasta || ""))}${linha("Responsável", esc(p.responsavel_nome || "sem responsável"))}${linha("Penhora", pos)}${linha("Monitoramento", mon)}
+    ${linha("Pasta", esc(p.pasta || ""))}${linha("Responsável", esc(p.responsavel_nome || "sem responsável"))}${linha("Penhora", seletorPenhora(p.id, p.posicao || ""))}${linha("Monitoramento", mon)}
     ${linha("Última consulta", `DataJud: ${fmtUtc(p.ultima_consulta)} · DJEN: ${fmtUtc(p.dje_consulta)}`)}</div>
     ${p.dados_editados ? '<div class="mut" style="font-size:12.5px;margin-top:4px">Há dados editados manualmente neste processo.</div>' : ""}`;
 }
@@ -1268,6 +1289,82 @@ $("#pn-add").onclick = async () => {
 ["#pn-f-pos", "#pn-grupo"].forEach(i => $(i).onchange = () => i === "#pn-grupo" ? desenharPenhora() : carregarPenhora());
 let penT; $("#pn-q").oninput = () => { clearTimeout(penT); penT = setTimeout(carregarPenhora, 350); };
 $("#pn-avisar").onclick = async () => { try { const r = await api("/api/penhora/avisar", "POST", {}); aviso(r.enviados ? `${r.enviados} aviso(s) enviado(s).` : "Nenhum aviso devido agora (" + r.motivo + ")."); } catch (e) { aviso(e.message); } };
+
+// ---- v0.8.3: marcação de penhora com um clique, em lote, sugestões e desfazer
+const SEL = new Set();
+function seletorPenhora(id, pos) {
+  return `<select class="pn-sel" data-pnsel="${id}" title="Risco de penhora: posição do nosso cliente neste processo" aria-label="Risco de penhora"><option value="">Penhora: não analisar</option><option value="executado"${pos === "executado" ? " selected" : ""}>Penhora: cliente executado</option><option value="exequente"${pos === "exequente" ? " selected" : ""}>Penhora: cliente exequente</option></select>`;
+}
+let UNDO_T;
+function oferecerDesfazer(texto, anteriores) {
+  const el = $("#undo");
+  if (!anteriores || !Object.keys(anteriores).length) { aviso(texto); return; }
+  $("#undo-txt").textContent = texto; el.style.display = "block"; el._ant = anteriores;
+  clearTimeout(UNDO_T); UNDO_T = setTimeout(() => { el.style.display = "none"; }, 15000);
+}
+$("#undo-btn").onclick = async () => {
+  const el = $("#undo"), ant = el._ant; el.style.display = "none"; clearTimeout(UNDO_T); if (!ant) return;
+  try { const r = await api("/api/penhora/lote", "POST", { restaurar: ant }); aviso(`${r.alterados} processo(s) restaurado(s).`); aposPenhora(); } catch (e) { aviso(e.message); }
+};
+function aposPenhora() {
+  status(); atualizarTelasDados();
+  if (!$("#t-penhora").classList.contains("hide")) { carregarPenhora(); carregarSugestoes(); }
+}
+async function marcarPenhora(ids, numeros, posicao) {
+  const r = await api("/api/penhora/lote", "POST", { ids, numeros, posicao });
+  const rot = posicao === "executado" ? "marcado(s) como cliente executado" : posicao === "exequente" ? "marcado(s) como cliente exequente" : "tirado(s) da análise de penhora";
+  let t = `${r.alterados} processo(s) ${rot}.` + (r.ja_estavam ? ` ${r.ja_estavam} já estava(m) assim.` : "");
+  if (r.nao_encontrados && r.nao_encontrados.length) t += ` Não cadastrado(s): ${r.nao_encontrados.length} (${r.nao_encontrados.slice(0, 2).join(", ")}${r.nao_encontrados.length > 2 ? "…" : ""}).`;
+  oferecerDesfazer(t, r.anteriores); aposPenhora(); return r;
+}
+function desenharSelecao() {
+  const n = SEL.size; $("#sel-bar").classList.toggle("hide", !n);
+  $("#sel-n").textContent = n + " selecionado(s)";
+  $("#sel-todos").checked = n > 0 && FILTRADOS.length > 0 && FILTRADOS.every(p => SEL.has(p.id));
+}
+document.addEventListener("change", async (e) => {
+  const cb = e.target.closest("[data-sel]");
+  if (cb) { const id = Number(cb.dataset.sel); cb.checked ? SEL.add(id) : SEL.delete(id); desenharSelecao(); return; }
+  if (e.target.id === "sel-todos") { if (e.target.checked) FILTRADOS.forEach(p => SEL.add(p.id)); else FILTRADOS.forEach(p => SEL.delete(p.id)); renderLista(); desenharSelecao(); return; }
+  const s = e.target.closest("[data-pnsel]");
+  if (s) { try { await marcarPenhora([Number(s.dataset.pnsel)], "", s.value); } catch (er) { aviso(er.message); aposPenhora(); } }
+});
+$("#sel-bar").onclick = async (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.id === "sel-limpar") { SEL.clear(); renderLista(); desenharSelecao(); return; }
+  if (b.dataset.selpos === undefined) return;
+  const ids = [...SEL]; if (!ids.length) return;
+  if (ids.length > 20 && !await confirmar(`Aplicar a ${ids.length} processos? (Dá para desfazer logo em seguida.)`, { titulo: "Marcação em lote", ok: "Aplicar" })) return;
+  try { await marcarPenhora(ids, "", b.dataset.selpos); SEL.clear(); renderLista(); desenharSelecao(); } catch (er) { aviso(er.message); }
+};
+$("#pn-nums-ok").onclick = async () => {
+  const t = $("#pn-nums").value; if (!t.trim()) { aviso("Cole os números dos processos."); return; }
+  try { const r = await marcarPenhora([], t, $("#pn-nums-pos").value); if (!r.nao_encontrados.length) $("#pn-nums").value = ""; } catch (e) { aviso(e.message); }
+};
+let SUG = [];
+async function carregarSugestoes() {
+  let d; try { d = await api("/api/penhora/sugestoes"); } catch (e) { $("#sg-resumo").textContent = e.message; return; }
+  SUG = d.itens;
+  $("#sg-resumo").innerHTML = d.total ? `${d.total} processo(s) de execução/cumprimento sem marcação; ${d.com_sugestao} com sugestão pelo lado do cliente. <span class="mut">Nada é marcado sem o seu aceite.</span>` + (d.com_sugestao ? ` <button class="b sm" id="sg-todas" type="button">Aceitar as ${d.com_sugestao} sugestões</button>` : "") + (d.total > SUG.length ? ` <span class="warn">Mostrando só ${SUG.length}.</span>` : "") : "Nenhum processo de execução ou cumprimento sem marcação.";
+  $("#sg-lista").innerHTML = SUG.map(x => `<div class="sg" data-sg="${x.id}"><div>${x.apelido || x.cliente ? `<b>${esc(x.apelido || x.cliente)}</b> ` : ""}<span class="mut">${linkProc(x.id, x.numero)} · ${esc(x.classe)}</span><br><span class="mut">${esc(x.motivo)}</span></div>
+    <div class="acoes">${x.sugerida ? `<button class="b sm" data-sgpos="${x.sugerida}" type="button">Aceitar: cliente ${x.sugerida}</button><button class="b sm sec" data-sgpos="${x.sugerida === "executado" ? "exequente" : "executado"}" type="button">Inverter</button>` : `<button class="b sm sec" data-sgpos="executado" type="button">Executado</button><button class="b sm sec" data-sgpos="exequente" type="button">Exequente</button>`}</div></div>`).join("");
+}
+$("#sg-lista").onclick = async (e) => {
+  const b = e.target.closest("[data-sgpos]"); if (!b) return;
+  try { await marcarPenhora([Number(b.closest("[data-sg]").dataset.sg)], "", b.dataset.sgpos); } catch (er) { aviso(er.message); }
+};
+$("#sg-resumo").onclick = async (e) => {
+  if (e.target.id !== "sg-todas") return;
+  const grupos = { executado: [], exequente: [] }; SUG.forEach(x => { if (x.sugerida) grupos[x.sugerida].push(x.id); });
+  const n = grupos.executado.length + grupos.exequente.length;
+  if (!await confirmar(`Aceitar as sugestões de ${n} processo(s) exibido(s) (${grupos.executado.length} como executado, ${grupos.exequente.length} como exequente)? A sugestão é só pelo lado do cliente nas partes: confira se houver dúvida. Dá para desfazer logo em seguida.`, { titulo: "Aceitar sugestões", ok: "Aceitar" })) return;
+  try {
+    const ant = {}; let tot = 0;
+    for (const pos of ["executado", "exequente"]) if (grupos[pos].length) { const r = await api("/api/penhora/lote", "POST", { ids: grupos[pos], posicao: pos }); Object.assign(ant, r.anteriores); tot += r.alterados; }
+    oferecerDesfazer(`${tot} processo(s) marcado(s) pelas sugestões.`, ant); aposPenhora();
+  } catch (er) { aviso(er.message); }
+};
+$("#sg-atualizar").onclick = carregarSugestoes;
 function desenharPenhoraInicio(p) {
   const el = $("#i-penhora"); if (!el) return; el.classList.toggle("hide", !(p.n_executado + p.n_exequente));
   $("#i-pen-cards").innerHTML = `<div class="card clic ${p.executado.critico ? "dest d-err" : ""}" data-pen="1"><span class="mut">Crítico</span><b>${p.executado.critico}</b></div><div class="card clic ${p.executado.alto ? "dest d-warn" : ""}" data-pen="1"><span class="mut">Alto</span><b>${p.executado.alto}</b></div><div class="card clic" data-pen="1"><span class="mut">Médio</span><b>${p.executado.medio}</b></div><div class="card clic ${p.oportunidades ? "dest d-ok" : ""}" data-pen="1"><span class="mut">Oportunidades (credor)</span><b>${p.oportunidades}</b></div>`;
@@ -1282,7 +1379,7 @@ document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
   if (b.dataset.t === "gestao") carregarGestao();
   if (b.dataset.t === "calendario") carregarCalendario();
   if (b.dataset.t === "historico") carregarHistorico();
-  if (b.dataset.t === "penhora") carregarPenhora();
+  if (b.dataset.t === "penhora") { carregarPenhora(); carregarSugestoes(); }
   if (b.dataset.t === "config") carregarConfig();
   if (b.dataset.t === "equipe") carregarEquipe();
   if (b.dataset.t === "sobre") carregarSobre();
@@ -1386,6 +1483,7 @@ function renderLista() {
     return semAcento(textoBusca(p)).includes(q) || (qn.length >= 4 && p.numero_limpo.includes(qn));
   });
   FILTRADOS = lista;
+  desenharSelecao();
   const total = lista.length;
   lista = lista.slice(0, LIMITE);
   $("#vazio").classList.toggle("hide", total > 0);
@@ -1399,7 +1497,7 @@ function renderLista() {
               : p.oab_status === "sem" ? `<br><span class="warn" style="font-size:13px">OAB não consta nas publicações deste processo</span>` : "";
     const avisoHtml = p.aviso ? `<div class="warn" style="font-size:13px;margin-top:4px">⚠ ${esc(p.aviso)} <button class="b sm sec" data-disp="${p.id}">Dispensar</button></div>` : "";
     return `<tr>
-      <td>${p.apelido ? `<b>${esc(p.apelido)}</b> ` : ""}${p.ativo ? "" : '<span class="tag">arquivado</span> '}${mon}${p.novos ? `<span class="badge">${p.novos} mov. nova(s)</span> ` : ""}${p.pub_novas ? `<span class="badge">${p.pub_novas} publ. nova(s)</span> ` : ""}${p.pub_analise ? `<span class="tag">${p.pub_analise} em análise</span>` : ""}${p.apelido || !p.ativo || p.monitorar || p.novos || p.pub_novas || p.pub_analise ? "<br>" : ""}
+      <td><label style="display:inline;margin:0;font-weight:400"><input type="checkbox" data-sel="${p.id}" ${SEL.has(p.id) ? "checked" : ""} aria-label="Selecionar este processo"></label> ${p.apelido ? `<b>${esc(p.apelido)}</b> ` : ""}${p.ativo ? "" : '<span class="tag">arquivado</span> '}${mon}${p.novos ? `<span class="badge">${p.novos} mov. nova(s)</span> ` : ""}${p.pub_novas ? `<span class="badge">${p.pub_novas} publ. nova(s)</span> ` : ""}${p.pub_analise ? `<span class="tag">${p.pub_analise} em análise</span>` : ""}${p.apelido || !p.ativo || p.monitorar || p.novos || p.pub_novas || p.pub_analise ? "<br>" : ""}
         <span class="num">${linkProc(p.id, p.numero)}</span>${p.motivo_obs ? ` <span class="mut">— ${esc(p.motivo_obs)}</span>` : ""}${p.dados_editados ? ' <span class="tag" title="Partes ou dados editados manualmente">editado</span>' : ""}<div class="qd">${htmlPartes(p)}</div>${htmlLocal(p) ? `<div class="mut">${htmlLocal(p)}</div>` : ""}${oab}${avisoHtml}${p.cliente || p.pasta ? `<br><span class="mut">${esc(p.cliente)}${p.pasta ? " · pasta " + esc(p.pasta) : ""}</span>` : ""}${p.responsavel_nome ? `<br><span class="mut">Responsável: ${esc(p.responsavel_nome)}</span>` : ""}</td>
       <td>${esc(p.ultimo_mov || "—")}<br><span class="mut">${fmt(p.ultimo_mov_data)}${p.classe ? " · " + esc(p.classe) : ""}</span>
         ${p.ultima_atualizacao ? `<br><span class="mut">registro do CNJ atualizado em ${fmt(p.ultima_atualizacao)}</span>` : ""}</td>
@@ -1407,7 +1505,7 @@ function renderLista() {
         <br><span class="mut">DJEN: ${DJE[p.dje_status] || "—"}${p.pub_total ? ` · ${p.pub_total} publ.${p.pub_ultima ? ", última em " + fmt(p.pub_ultima) : ""}` : ""}</span>${p.dje_status === "erro" && p.dje_mensagem ? `<br><span class="err" style="font-size:13px">${esc(p.dje_mensagem)}</span>` : ""}</td>
       <td><div class="acoes">
         <button class="b sm sec" data-ver="${p.id}">Movimentos</button>
-        <button class="b sm sec" data-edit="${p.id}">Editar</button>${p.ativo ? `<button class="b sm sec" data-hist="${p.id}">Histórico</button><button class="b sm sec" data-ag="${p.id}">Agendar</button><button class="b sm sec" data-resp="${p.id}">Responsável</button><button class="b sm sec" data-upd="${p.id}">Atualizar</button><button class="b sm sec" data-mon="${p.id}" data-m="${p.monitorar ? 0 : 1}">${p.monitorar ? "Parar de monitorar" : "Monitorar"}</button><button class="b sm sec" data-arq="${p.id}" data-a="0">Arquivar</button>`
+        <button class="b sm sec" data-edit="${p.id}">Editar</button>${p.ativo ? `<button class="b sm sec" data-hist="${p.id}">Histórico</button><button class="b sm sec" data-ag="${p.id}">Agendar</button><button class="b sm sec" data-resp="${p.id}">Responsável</button><button class="b sm sec" data-upd="${p.id}">Atualizar</button><button class="b sm sec" data-mon="${p.id}" data-m="${p.monitorar ? 0 : 1}">${p.monitorar ? "Parar de monitorar" : "Monitorar"}</button><button class="b sm sec" data-arq="${p.id}" data-a="0">Arquivar</button>${seletorPenhora(p.id, p.posicao)}`
                   : `<button class="b sm sec" data-arq="${p.id}" data-a="1">Reativar</button>`}
         <button class="b sm dg" data-del="${p.id}">Remover</button></div></td></tr>`;
   }).join("");

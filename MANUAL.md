@@ -441,3 +441,20 @@ Link do ato: cada publicação ganhou o botão "Abrir no tribunal" (abre o ender
 - Esse endereço só passa a ser guardado a partir desta versão. Publicações antigas ganham o link na PRÓXIMA consulta do DJEN do processo (botão de consulta ou varredura diária), se o DJEN o informar.
 - O DJEN nem sempre informa o endereço. Quando não informa, e a publicação tem o código (hash) da comunicação, aparece "Certidão (CNJ)": é o endereço da certidão no servidor do CNJ. ATENÇÃO: o programa não conseguiu verificar esse endereço contra o servidor real; se não abrir, avise para corrigirmos.
 - Só são aceitos endereços que começam com http:// ou https://.
+
+
+38. MARCAR PROCESSOS NO RISCO DE PENHORA, SEM TRABALHEIRA (v0.8.3)
+
+Quatro jeitos de incluir ou tirar processos da análise de penhora (todos com o mesmo significado: informar se o NOSSO CLIENTE é executado ou exequente).
+1) Um clique: em cada processo da aba Processos há uma caixa "Penhora: não analisar / cliente executado / cliente exequente". A mesma caixa aparece em "Dados do processo", no Histórico.
+2) Vários de uma vez, pela aba Processos: marque as caixinhas à esquerda de cada processo (a caixa do cabeçalho seleciona TODOS os processos da lista atual, inclusive os que não aparecem por causa do limite de exibição; use a busca/filtro antes, por exemplo pelo nome do cliente). Aparece uma barra azul com "Penhora: cliente executado", "cliente exequente" e "Tirar da análise de penhora". Acima de 20 processos o programa pede confirmação.
+3) Vários de uma vez, colando números: aba Risco de penhora > "Marcar vários de uma vez". Cole os números (um por linha, com ou sem pontuação), escolha a posição e aplique. Números que não estão cadastrados são informados no aviso e não são criados.
+4) Sugestões: aba Risco de penhora > "Sugestões" lista os processos ATIVOS, sem marcação, cuja classe (DataJud) é de execução ou cumprimento de sentença (embargos e impugnações ficam de fora). A sugestão vem do polo do nosso cliente nas partes: polo ativo = exequente; polo passivo = executado. Botões: "Aceitar", "Inverter" (se a sugestão estiver errada) ou, quando o cliente não foi identificado, "Executado" / "Exequente". "Aceitar as N sugestões" aplica todas as exibidas, com confirmação. NADA é marcado sem o seu aceite.
+Desfazer: depois de qualquer marcação aparece, por 15 segundos, o aviso escuro no canto inferior esquerdo com o botão "Desfazer", que devolve cada processo à posição anterior.
+
+Limites e cuidados (leia):
+- Marcar mais processos gera mais alertas, e a leitura de risco é aproximada, por palavras-chave. Marque aos poucos e confira os primeiros resultados antes de marcar a carteira inteira.
+- A sugestão só existe se (a) o processo já foi consultado no DataJud (é dele que vem a classe) e (b) o nosso cliente foi identificado nas partes. Sem isso, o processo aparece na lista sem sugestão. Se o cliente aparece nos dois polos, o programa também não sugere: confira.
+- O polo nem sempre diz quem executa quem (reconvenção, cumprimento de sentença em ação com polos invertidos, litisconsórcio). Por isso a aceitação é sua.
+- Desfazer devolve a posição, mas não restaura o histórico de avisos já enviados por e-mail: um processo restaurado pode voltar a gerar aviso.
+- Ainda não existe: sugestão de retirada quando o processo se encerra, nem regra "este cliente é sempre exequente" (ficaram para uma próxima versão, justamente pelo risco de erro: o mesmo cliente pode ser executado em outro processo).

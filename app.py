@@ -264,6 +264,21 @@ def r_posicao(h, pid):
     h.json({"ok": True})
 
 
+def r_penhora_lote(h):
+    c = h.corpo()
+    try:
+        r = risco.definir_lote(CTX.banco, c.get("ids"), c.get("numeros"), str(c.get("posicao") or "").strip(),
+                               c.get("restaurar") if isinstance(c.get("restaurar"), dict) else None)
+    except (ValueError, TypeError) as e:
+        return h.json({"erro": str(e)}, 400)
+    h.auditar("posicao_lote", f"{r['alterados']} processo(s)" + (" (desfazer)" if isinstance(c.get("restaurar"), dict) else f": {c.get('posicao') or 'removidos da análise'}"))
+    h.json(r)
+
+
+def r_penhora_sugestoes(h):
+    h.json(risco.sugerir(CTX.banco))
+
+
 def r_penhora_avisar(h):
     r = risco.avisar(CTX.banco, CTX.config.dados, intervalo=0)
     h.auditar("risco_penhora_aviso_manual", f"{r['enviados']} e-mail(s)")
@@ -1072,6 +1087,8 @@ ROTAS = [
     ("GET", r"/api/processos/(\d+)/penhora", r_penhora_proc, "usu"),
     ("POST", r"/api/processos/(\d+)/posicao", r_posicao, "usu"),
     ("POST", r"/api/penhora/avisar", r_penhora_avisar, "adm"),
+    ("POST", r"/api/penhora/lote", r_penhora_lote, "usu"),
+    ("GET", r"/api/penhora/sugestoes", r_penhora_sugestoes, "usu"),
     ("GET", r"/api/processos/(\d+)/historico", r_historico, "usu"),
     ("GET", r"/api/processos/(\d+)/dados", r_proc_dados, "usu"),
     ("POST", r"/api/processos/(\d+)/dados", r_proc_dados_salvar, "usu"),

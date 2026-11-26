@@ -277,6 +277,99 @@ def definir_posicao(b, pid, posicao):
     _cache["v"] = None
 
 
+MAX_LOTE = 5000
+_RE_CNJ = re.compile(r"\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}|\d{20}")
+
+
+def numeros_do_texto(texto):
+    """Extrai números CNJ (com ou sem máscara) de um texto colado; devolve só os 20 dígitos, sem repetir, na ordem."""
+    vistos, out = set(), []
+    for m in _RE_CNJ.finditer(str(texto or "")):
+        d = re.sub(r"\D", "", m.group(0))
+        if d not in vistos:
+            vistos.add(d)
+            out.append(d)
+    return out
+
+
+def definir_lote(b, ids=None, numeros="", posicao="", restaurar=None):
+    """Marca vários processos de uma vez. 'ids' e/ou 'numeros' (texto colado); posicao '' remove da análise.
+    'restaurar' = {id: posição anterior} (desfazer). Devolve alterados, anteriores (para desfazer) e números não encontrados."""
+    if restaurar is not None:
+        pares = {}
+        for k, v in dict(restaurar).items():
+            if v not in POSICOES:
+                raise ValueError("Posição inválida no desfazer.")
+            pares[int(k)] = v
+    else:
+        if posicao not in POSICOES:
+            raise ValueError("Posição inválida: use 'executado', 'exequente' ou vazio.")
+        alvo = {int(i) for i in (ids or [])}
+        nao = []
+        with b.lock:
+            por_num = {r["numero_limpo"]: r["id"] for r in b.conn.execute("SELECT id, numero_limpo FROM processos").fetchall()}
+        for n in numeros_do_texto(numeros):
+            if n in por_num:
+                alvo.add(por_num[n])
+            else:
+                nao.append(n)
+        pares = {i: posicao for i in alvo}
+    if len(pares) > MAX_LOTE:
+        raise ValueError(f"No máximo {MAX_LOTE} processos por vez.")
+    anteriores, alterados = {}, 0
+    with b.lock:
+        for pid, pos in pares.items():
+            r = b.conn.execute("SELECT posicao FROM processos WHERE id=?", (pid,)).fetchone()
+            if not r:
+                continue
+            ant = r["posicao"] or ""
+            if ant == pos:
+                continue
+            b.conn.execute("UPDATE processos SET posicao=? WHERE id=?", (pos, pid))
+            if not pos:
+                b.conn.execute("DELETE FROM risco_estado WHERE processo_id=?", (pid,))
+            anteriores[pid] = ant
+            alterados += 1
+        b.conn.commit()
+    _cache["v"] = None
+    return {"alterados": alterados, "ja_estavam": len(pares) - alterados if restaurar is None else 0,
+            "anteriores": {str(k): v for k, v in anteriores.items()},
+            "nao_encontrados": nao if restaurar is None else []}
+
+
+def _eh_execucao(classe):
+    c = _n(classe)
+    return ("execucao" in c or "cumprimento" in c) and not c.startswith("embargos") and "impugnacao" not in c
+
+
+def sugerir(b, limite=300):
+    """Processos ativos, sem marcação, de classe de execução/cumprimento. A posição sugerida vem do polo do NOSSO cliente
+    (polo ativo = exequente; passivo = executado); se o cliente não foi identificado nas partes, 'sugerida' fica vazia
+    e a escolha é do usuário. Nada é gravado aqui."""
+    with b.lock:
+        procs = [dict(r) for r in b.conn.execute(
+            "SELECT id, numero, apelido, cliente, classe FROM processos WHERE ativo=1 AND posicao='' AND classe<>'' ORDER BY id").fetchall()]
+        procs = [p for p in procs if _eh_execucao(p["classe"])]
+        polos = {}
+        if procs:
+            for r in b.conn.execute("SELECT processo_id, polo, nome FROM processo_partes WHERE lado='cliente' AND excluida=0 AND polo IN ('A','P')").fetchall():
+                polos.setdefault(r["processo_id"], {}).setdefault(r["polo"], []).append(r["nome"])
+    itens = []
+    for p in procs:
+        d = polos.get(p["id"], {})
+        if len(d) == 1:
+            polo = next(iter(d))
+            p["sugerida"] = "exequente" if polo == "A" else "executado"
+            p["motivo"] = "cliente (" + "; ".join(d[polo][:2]) + ") no polo " + ("ativo" if polo == "A" else "passivo")
+        elif len(d) > 1:
+            p["sugerida"], p["motivo"] = "", "cliente aparece nos dois polos: confira"
+        else:
+            p["sugerida"], p["motivo"] = "", "cliente não identificado nas partes"
+        itens.append(p)
+    itens.sort(key=lambda x: (x["sugerida"] == "", (x["cliente"] or "").lower(), x["numero"]))
+    return {"total": len(itens), "com_sugestao": sum(1 for x in itens if x["sugerida"]), "itens": itens[:limite]}
+
+
 def listar(b, cfg_prazos=None, posicao=None, hoje=None, q=""):
     cal = prazos.Calendario((cfg_prazos or {}).get("feriados_extras"), (cfg_prazos or {}).get("recesso"))
     sql, args = "SELECT * FROM processos WHERE ativo=1 AND posicao<>''", []
