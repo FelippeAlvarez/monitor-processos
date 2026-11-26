@@ -1,4 +1,4 @@
-MONITOR DE PROCESSOS — MANUAL DE USO (v0.7.6)
+MONITOR DE PROCESSOS — MANUAL DE USO (v0.8.0)
 
 1. O QUE É
 Programa local que consulta periodicamente a API Pública do DataJud (CNJ) e o DJEN (publicações, via Comunica PJe)
@@ -402,8 +402,26 @@ Recesso: o padrão passou a ser 20/12 a 19/01, inclusive (decisão do escritóri
 Quem já salvou a configuração antiga: Configurações > Cálculo de prazo > "Fim do recesso" = 01-19, e salvar. A mudança de padrão só vale para instalações novas.
 
 Roteiro (servidor continua LOCAL, no PC do escritório):
-  v0.8   painel de gestão
+  v0.8   painel de gestão (feito na v0.8.0, seção 35)
   v0.9   segurança: 2FA, limite de tentativas de login, backup automático
   depois perfil/portal do cliente; IA local; CPF/CNPJ por cliente na análise de penhora
   PWA (ícone no menu Iniciar) e início automático com o Windows (pasta Inicializar): quando o programa passar a rodar em um computador fixo do escritório.
 Observação: o PWA só abre a janela; o servidor Python precisa estar ligado (hoje, pelo iniciar.bat).
+
+
+35. PAINEL DE GESTÃO (v0.8.0)
+
+Onde: aba "Gestão" (só administrador; só leitura — não altera nenhum dado).
+O que mostra:
+- Faixa de números: publicações a tratar, compromissos vencidos, prazos fatais até 7 dias, penhora crítico/alto, processos parados e falhas de consulta. Os cartões com seta levam à aba correspondente.
+- Publicações do DJEN: disponibilizadas hoje (data de disponibilização = hoje), detectadas hoje (o programa as encontrou hoje), novas sem tratamento (e desde quando), publicações de filtros (OAB) ainda não vistas, e gráfico dos últimos 7 dias. Publicações iguais enviadas a várias partes contam uma vez.
+- Carga da equipe: por responsável, processos ativos, compromissos vencidos / de hoje / dos próximos 7 dias, publicações novas e em análise nos processos dele. Usuário ativo sem nada aparece com zeros (útil para ver quem está livre); "(sem responsável)" reúne o que ninguém assumiu.
+- Risco e alertas: processos de penhora em grau crítico/alto e oportunidades; prazos fatais (tipo "Prazo fatal" da agenda) vencidos ou até 7 dias.
+- Falhas de consulta: processos monitorados com erro no DataJud, "não encontrado" ou erro no DJEN, e filtros de OAB com erro.
+- Processos parados: monitorados, já consultados com sucesso, sem andamento nem publicação há N dias (30, 60, 90, 180 ou 365; padrão 90). Mostra os 50 mais antigos.
+- Carteira: ativos, monitorados, não monitorados, arquivados; por cliente (15 maiores), por tribunal e por classe.
+Limites e cuidados:
+- "Parado" é indício, não certeza: o DataJud tem defasagem e o DJEN só traz o que foi publicado. Processo sem nenhuma data conhecida não entra na lista (conta como "sem dados"). Processo não monitorado não entra, pois não é consultado com frequência.
+- Compromissos da agenda sem responsável aparecem em "(sem responsável)".
+- A classe e o tribunal vêm do DataJud: processos ainda não consultados aparecem como "(sem classe)".
+- O número de "disponibilizadas hoje" fica zero em fins de semana e feriados, pois o DJEN só publica em dias úteis.

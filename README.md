@@ -8,6 +8,7 @@ Programa local (Windows/Linux/macOS, Python 3.9+, apenas biblioteca padrão) que
 - Painel em `http://127.0.0.1:8765`, alertas por e-mail opcionais, dados somente na máquina/servidor do escritório.
 - **Página inicial (v0.6.3)**: aba "Início" com cartões, gráfico dos últimos 14 dias, publicações por situação, tribunais, equipe e listas do que é novo (MANUAL, seção 27).
 - **Partes, edição e janela própria (v0.7.4)**: nomes das partes e parte contrária nas abas Processos e Publicações, edição de partes/advogados/vara/comarca/tipo de ação, busca por parte e abertura em janela de aplicativo (MANUAL, seção 32).
+- **Painel de gestão (v0.8.0)**: aba Gestão (só administrador): carga da equipe, carteira, processos parados, risco/alertas e publicações do DJEN (MANUAL, seção 35).
 - **Recesso padrão 20/12 a 19/01 (v0.7.6)**: decisão do escritório; o CPC art. 220 vai até 20/01 (MANUAL, seção 34).
 - **Pesquisa no DJEN (v0.7.5)**: na aba Publicações, pesquisa avulsa por OAB, número do processo, nome da parte e período (padrão: hoje), sem gravar nada (MANUAL, seção 33).
 - **Risco de penhora (v0.7.3)**: aba "Risco de penhora" (grau baixo/médio/alto/crítico para cliente executado; oportunidade para credor), prazo de pagamento aproximado e avisos por e-mail (MANUAL, seção 31).

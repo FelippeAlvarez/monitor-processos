@@ -25,6 +25,7 @@ from urllib.parse import parse_qs, urlparse
 
 import auth
 import agenda
+import gestao
 import historico
 import janela
 import lembretes
@@ -154,6 +155,13 @@ def r_dashboard(h):
     d["rodando"] = CTX.monitor.rodando
     d["progresso"] = CTX.monitor.progresso
     h.json(d)
+
+
+def r_gestao(h):
+    """v0.8: painel de gestão (só leitura; só administrador)."""
+    q = parse_qs(urlparse(h.path).query)
+    v = (q.get("parados") or [""])[0]
+    h.json(gestao.painel(CTX.banco, CTX.config.dados.get("prazos"), parados_dias=int(v) if v.isdigit() else gestao.PARADOS_PADRAO))
 
 
 # ---------------------------------------------------------------- agenda (v0.7.0)
@@ -1035,6 +1043,7 @@ ROTAS = [
     ("POST", r"/api/processos/(\d+)/consultar", r_consultar_um, "usu"),
     ("POST", r"/api/visto-todos", r_visto_todos, "usu"),
     ("GET", r"/api/dashboard", r_dashboard, "usu"),
+    ("GET", r"/api/gestao", r_gestao, "adm"),
     ("GET", r"/api/tipos-evento", r_tipos_evento, "usu"),
     ("POST", r"/api/tipos-evento", r_tipo_evento_add, "adm"),
     ("POST", r"/api/tipos-evento/(\d+)", r_tipo_evento_edit, "adm"),

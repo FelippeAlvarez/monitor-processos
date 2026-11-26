@@ -322,6 +322,7 @@
 Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, as intimações oficiais nem o controle de prazos.</b></div>
 <nav id="nav">
   <button data-t="inicio" class="on">Início</button>
+  <button data-t="gestao" class="so-adm">Gestão</button>
   <button data-t="painel">Processos</button>
   <button data-t="historico">Histórico</button>
   <button data-t="calendario">Calendário <span class="badge hide" id="nav-cal"></span></button>
@@ -359,6 +360,28 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
     <div class="card"><b>Atenção</b><div id="i-aten"></div></div>
   </div>
   <p class="mut" style="font-size:12.5px">Os números contam só processos ativos. Publicações iguais enviadas a várias partes contam uma vez. Andamentos vêm do DataJud (com defasagem); o gráfico usa a data do andamento/da disponibilização.</p>
+</section>
+<section id="t-gestao" class="hide">
+  <div class="acoes" style="margin-bottom:12px;align-items:end">
+    <div><label for="g-par">Processo parado há pelo menos</label><select id="g-par"><option value="30">30 dias</option><option value="60">60 dias</option><option value="90" selected>90 dias</option><option value="180">180 dias</option><option value="365">365 dias</option></select></div>
+    <button class="b sec sm" id="g-atualizar" type="button">Atualizar</button>
+    <span class="mut" id="g-quando"></span>
+  </div>
+  <div class="cards" id="g-cards"></div>
+  <div class="card"><b>Publicações do DJEN</b> <span class="mut">(publicações iguais enviadas a várias partes contam uma vez)</span><div class="cards" id="g-pub-cards" style="margin-top:8px"></div><div class="grid2 gi"><div><b style="font-size:13.5px">Disponibilizadas nos últimos 7 dias</b><div id="g-pub-serie"></div></div><div id="g-pub-obs" class="mut"></div></div></div>
+  <div class="card"><b>Carga da equipe</b> <span class="mut">(compromissos em aberto, publicações a tratar e processos por responsável)</span><div style="overflow-x:auto"><table id="g-equipe"></table></div></div>
+  <div class="grid2 gi">
+    <div class="card"><b>Risco e alertas</b><div id="g-alertas"></div></div>
+    <div class="card"><b>Falhas de consulta</b> <span class="mut" id="g-falhas-n"></span><div id="g-falhas"></div></div>
+  </div>
+  <div class="card"><b>Processos parados</b> <span class="mut" id="g-par-leg"></span><div style="overflow-x:auto"><table id="g-parados"></table></div></div>
+  <div class="card"><b>Carteira de processos</b>
+    <div class="grid2 gi" style="margin-top:8px">
+      <div><b style="font-size:13.5px">Por cliente</b> <span class="mut" id="g-cli-n"></span><div id="g-cli"></div></div>
+      <div><b style="font-size:13.5px">Por tribunal</b><div id="g-trib"></div><b style="font-size:13.5px;display:block;margin-top:14px">Por classe</b><div id="g-cla"></div></div>
+    </div>
+  </div>
+  <p class="mut" style="font-size:12.5px">Painel só para administradores; apenas leitura. "Parado" considera só processos monitorados e já consultados com sucesso, pela data mais recente entre o último andamento e a última publicação. Andamentos vêm do DataJud, com defasagem, e a publicação só existe se o DJEN a registrou: processo sem andamento ou publicação não entra na lista, aparece como "sem dados".</p>
 </section>
 <section id="t-historico" class="hide">
   <div class="cal-bar">
@@ -1215,6 +1238,7 @@ document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
   document.querySelectorAll("#nav button").forEach(x => x.classList.toggle("on", x === b));
   document.querySelectorAll("main > section").forEach(s => s.classList.toggle("hide", s.id !== "t-" + b.dataset.t));
   if (b.dataset.t === "inicio") carregarDashboard();
+  if (b.dataset.t === "gestao") carregarGestao();
   if (b.dataset.t === "calendario") carregarCalendario();
   if (b.dataset.t === "historico") carregarHistorico();
   if (b.dataset.t === "penhora") carregarPenhora();
@@ -1224,6 +1248,47 @@ document.querySelectorAll("#nav button").forEach(b => b.onclick = () => {
   if (b.dataset.t === "publicacoes") carregarPublicacoes();
   if (b.dataset.t === "oab") carregarOab();
 });
+
+
+// ---- v0.8 painel de gestão
+async function carregarGestao() {
+  let g; try { g = await api("/api/gestao?parados=" + $("#g-par").value); } catch (e) { return; }
+  const pb = g.publicacoes, ca = g.carteira, al = g.alertas, pa = g.parados;
+  $("#g-quando").textContent = "Atualizado às " + new Date().toLocaleTimeString("pt-BR");
+  const venc = g.equipe.reduce((a, x) => a + x.vencidos, 0), hoje = g.equipe.reduce((a, x) => a + x.hoje, 0);
+  const graves = al.penhora.executado.critico + al.penhora.executado.alto;
+  $("#g-cards").innerHTML = [
+    ["info", "Publicações a tratar", pb.nao_tratadas, `${pb.em_analise} em análise` + (pb.dias_mais_antiga > 0 ? ` · a mais antiga: ${pb.dias_mais_antiga} dia(s)` : ""), "publicacoes"],
+    [venc ? "err" : "ok", "Compromissos vencidos", venc, `${hoje} para hoje`, "calendario"],
+    [al.prazos_fatais.length ? "warn" : "ok", "Prazos fatais até 7 dias", al.prazos_fatais.length, al.prazos_fatais.some(x => x.atrasado) ? "há prazo fatal vencido" : "nenhum vencido", "calendario"],
+    [graves ? "warn" : "ok", "Penhora: crítico/alto", graves, `${al.penhora.oportunidades} oportunidade(s)`, "penhora"],
+    [pa.total ? "warn" : "ok", `Parados ≥ ${pa.dias} dias`, pa.total, pa.sem_dados ? `${pa.sem_dados} sem dados` : "", ""],
+    [al.falhas_total ? "err" : "ok", "Falhas de consulta", al.falhas_total, `${al.oabs_com_erro.length} filtro(s) com erro`, ""],
+  ].map(([c, t, n, sub, aba]) => `<div class="card ${aba ? "clic" : ""} dest d-${c}" ${aba ? `data-ir="${aba}"` : ""}><span class="mut">${t}</span><b>${n}</b><small>${esc(sub)}</small></div>`).join("");
+  $("#g-pub-cards").innerHTML = [
+    ["info", "Disponibilizadas hoje", pb.disponibilizadas_hoje, "data de disponibilização = hoje"],
+    ["", "Detectadas hoje", pb.detectadas_hoje, "o programa as encontrou hoje"],
+    ["warn", "Novas, sem tratamento", pb.nao_tratadas, pb.mais_antiga_nao_tratada ? "desde " + dataBr(pb.mais_antiga_nao_tratada) : "nenhuma pendente"],
+    ["", "Dos filtros (OAB), não vistas", pb.filtros_nao_vistas, "publicações achadas por filtro"],
+  ].map(([c, t, n, sub]) => `<div class="card ${c ? "dest d-" + c : ""}"><span class="mut">${t}</span><b>${n}</b><small>${esc(sub)}</small></div>`).join("");
+  $("#g-pub-serie").innerHTML = barras(pb.serie_7d.map(x => ({ rot: dataBr(x.dia).slice(0, 5), v: x.n })), "var(--pubcor)");
+  $("#g-pub-obs").innerHTML = "O DJEN só publica em dias úteis; fins de semana e feriados aparecem com zero. Um número alto de “novas, sem tratamento” com data antiga indica fila parada.";
+  const linhas = g.equipe.map(x => `<tr><td><b>${esc(x.nome)}</b></td><td class="num">${x.processos}</td><td class="num ${x.vencidos ? "err" : ""}">${x.vencidos}</td><td class="num">${x.hoje}</td><td class="num">${x.prox7}</td><td class="num">${x.pub_novas}</td><td class="num">${x.pub_analise}</td></tr>`).join("");
+  $("#g-equipe").innerHTML = `<tr><th>Responsável</th><th>Processos</th><th>Vencidos</th><th>Hoje</th><th>Próx. 7 dias</th><th>Pub. novas</th><th>Pub. em análise</th></tr>` + (linhas || '<tr><td colspan="7" class="mut">Sem dados.</td></tr>');
+  $("#g-alertas").innerHTML = (al.penhora.lista.length ? `<ul class="lst">${al.penhora.lista.map(x => `<li data-pen="1"><div class="t"><b>${esc(x.apelido || x.cliente || x.numero)}</b><span class="rk ${x.grau}">${GRAU_ROT[x.grau] || ""}</span></div><div class="mut">${esc(x.rotulo)}</div></li>`).join("")}</ul>` : '<p class="mut">Nenhum processo em risco crítico/alto nem oportunidade.</p>') +
+    (al.prazos_fatais.length ? `<b style="display:block;margin-top:12px;font-size:13.5px">Prazos fatais</b><ul class="lst">${al.prazos_fatais.map(x => `<li data-ag="${x.id}"><div class="t"><b>${esc(x.titulo)}</b><span class="${x.atrasado ? "err" : "warn"}">${dataBr(x.data)}${x.atrasado ? " (vencido)" : ""}</span></div><div class="mut">${esc(x.processo_apelido || x.cliente || x.processo_numero || "")}</div></li>`).join("")}</ul>` : "");
+  $("#g-falhas-n").textContent = al.falhas_total ? `(${al.falhas_total}${al.falhas_total > al.falhas.length ? ", mostrando " + al.falhas.length : ""})` : "";
+  $("#g-falhas").innerHTML = (al.falhas.length ? `<ul class="lst">${al.falhas.map(x => `<li data-mov="${x.id}"><div class="t"><b>${esc(x.apelido || x.cliente || x.numero)}</b></div><div class="mut">${esc(x.motivo)}</div></li>`).join("")}</ul>` : '<p class="mut">Nenhuma falha em processos monitorados.</p>') +
+    (al.oabs_com_erro.length ? `<b style="display:block;margin-top:12px;font-size:13.5px">Filtros com erro</b>${al.oabs_com_erro.map(o => `<div class="mut">${esc(o.oab)} ${esc(o.rotulo || "")} — ${esc(o.mensagem)}</div>`).join("")}` : "");
+  $("#g-par-leg").textContent = `(${pa.total} processo(s)${pa.total > pa.lista.length ? ", mostrando os " + pa.lista.length + " mais antigos" : ""})`;
+  $("#g-parados").innerHTML = `<tr><th>Processo</th><th>Cliente</th><th>Tribunal</th><th>Último movimento</th><th>Dias</th><th>Responsável</th></tr>` +
+    (pa.lista.map(x => `<tr data-mov="${x.id}" style="cursor:pointer"><td><b>${esc(x.apelido || x.cliente || x.numero)}</b>${x.apelido || x.cliente ? `<div class="mut num">${esc(x.numero)}</div>` : ""}</td><td>${esc(x.cliente)}</td><td>${esc(x.tribunal)}</td><td>${dataBr(x.ultimo)}</td><td class="num">${x.dias}</td><td>${esc(x.responsavel)}</td></tr>`).join("") || '<tr><td colspan="6" class="mut">Nenhum processo parado neste prazo.</td></tr>');
+  $("#g-cli-n").textContent = `(${ca.n_clientes} cliente(s); os 15 maiores)`;
+  $("#g-cli").innerHTML = barras(ca.por_cliente.map(x => ({ rot: x.nome, v: x.n })), "var(--ac)");
+  $("#g-trib").innerHTML = barras(ca.por_tribunal.map(x => ({ rot: x.nome, v: x.n })), "var(--ac)");
+  $("#g-cla").innerHTML = barras(ca.por_classe.map(x => ({ rot: x.nome, v: x.n })), "var(--ac)");
+}
+$("#g-par").onchange = carregarGestao; $("#g-atualizar").onclick = carregarGestao;
 
 // painel
 const DJE = { ok: "consultado", pendente: "na fila", erro: "erro (nova tentativa automática)" };
