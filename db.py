@@ -685,6 +685,11 @@ class Banco:
         return self._linhas("SELECT COUNT(*) AS n FROM processos WHERE ativo=1 AND monitorar=1 AND COALESCE(ultima_consulta,'')>=?",
                             (inicio_dia_utc,))[0]["n"]
 
+    def erros_desde(self, inicio_dia_utc):
+        """Monitorados cuja consulta de hoje terminou em erro (a data de consulta conta mesmo quando falha)."""
+        return self._linhas("SELECT COUNT(*) AS n FROM processos WHERE ativo=1 AND monitorar=1 AND status='erro' "
+                            "AND COALESCE(ultima_consulta,'')>=?", (inicio_dia_utc,))[0]["n"]
+
     def registrar_descoberta_status(self, oid, status, mensagem="", desde="", truncado=False, ignorados=0):
         with self.lock:
             self.conn.execute(

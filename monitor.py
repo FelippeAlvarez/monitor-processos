@@ -31,6 +31,16 @@ class LimiteExcedido(Exception):
     pass
 
 
+class CnjInstavel(LimiteExcedido):
+    """Falhas seguidas do servidor do CNJ (5xx, timeout): a culpa não é dos processos; pausa o ciclo sem marcá-los como erro."""
+
+
+def _transitorio(e):
+    """Falha do lado do servidor/rede (HTTP 5xx, timeout, conexão), que não diz nada sobre o processo consultado."""
+    c = e.codigo
+    return (isinstance(c, int) and c >= 500) or (c is None and getattr(e, "transitorio", False))
+
+
 class Monitor:
     def __init__(self, banco, config, pausa_entre_consultas=3.0, tamanho_lote=10,
                  espera_429=(30, 90, 180), pausa_limite=900, espera_parcial=(20, 60, 180)):
@@ -152,8 +162,8 @@ class Monitor:
     def candidatos_hoje(self, agora=None):
         """Ids ainda não consultados hoje, na ordem de prioridade (nunca consultados primeiro)."""
         t = time.time()
-        return [p["id"] for p in self.banco.candidatos_varredura(inicio_do_dia_utc(agora))
-                if self.proxima.get(p["id"], 0) <= t]
+        ids = [p["id"] for p in self.banco.candidatos_varredura(inicio_do_dia_utc(agora)) if self.proxima.get(p["id"], 0) <= t]
+        return sorted(ids, key=lambda i: 1 if self.tentativas.get(i, 0) >= 2 else 0)  # reincidentes no fim da fila
 
     def candidatos_dje_hoje(self, agora=None):
         """Monitorados ainda sem consulta ao DJEN hoje (o DJEN tem a sua própria conta, separada do DataJud)."""
@@ -207,7 +217,10 @@ class Monitor:
         tam = max(1, int(v.get("bloco", 100)))
         # estimativa grosseira: nº de blocos restantes x intervalo (cada bloco também leva alguns minutos para rodar)
         previsao_min = (-(-max(0, ativos - feitos) // tam)) * intervalo
+        erros = self.banco.erros_desde(inicio_do_dia_utc(agora))
         return {"ativa": self.varredura_ativa(), "ativos": ativos, "feitos_hoje": feitos,
+                "erros_hoje": erros, "ok_hoje": max(0, feitos - erros),
+                "pausado_ate": self.pausado_ate if self.pausado_ate > time.time() else None,
                 "restantes": max(0, ativos - feitos), "bloco": int(v.get("bloco", 100)), "intervalo_min": intervalo,
                 "inicio": v.get("inicio"), "na_janela": self.na_janela(agora),
                 "previsao_min": previsao_min, "triagem_restantes": len(self.candidatos_triagem()),
@@ -273,9 +286,17 @@ class Monitor:
     def executar(self, ids=None, usar_datajud=True, usar_dje=True):
         """Consulta os processos indicados (todos os ativos se None). Devolve o resumo do ciclo."""
         processos = self.banco.ativos(ids, so_monitorados=ids is None)
+        if usar_datajud and time.time() < self.pausado_ate:
+            # pausa por sobrecarga do CNJ ainda vigente (pedido manual zera a pausa): não insistir; fica para depois
+            log.info("DataJud em pausa por sobrecarga até %s: %d processo(s) ficam para a próxima tentativa",
+                     dt.datetime.fromtimestamp(self.pausado_ate).strftime("%H:%M:%S"), len(processos))
+            usar_datajud = False
+        # quem já falhou duas vezes seguidas vai para o FIM da fila (não atrasa os demais)
+        processos = sorted(processos, key=lambda p: 1 if self.tentativas.get(p["id"], 0) >= 2 else 0)
         total = len(processos) if usar_datajud else 0
         ctx = {"feitos": 0, "total": total, "novos": [], "erros": 0, "interrompido": None, "feitos_ids": set(),
-               "pubs": [], "dje_erros": 0, "dje_feitos": 0, "dje_aviso": ""}
+               "pubs": [], "dje_erros": 0, "dje_feitos": 0, "dje_aviso": "",
+               "lote_falhas": 0, "transit": 0, "por_alias": {}}
         grupos = {}
         for p in (processos if usar_datajud else []):
             alias = self.config.dados["endpoints_override"].get(p["alias"], p["alias"])
@@ -297,11 +318,13 @@ class Monitor:
                                 self._falha(p, f"Erro inesperado: {e}", ctx)
         finally:
             self.progresso = ""
+        for alias, c in ctx["por_alias"].items():
+            log.info("Resumo %s: %d ok, %d com erro, %d adiado(s)", alias, c.get("ok", 0), c.get("erro", 0), c.get("adiado", 0))
         # o que não foi alcançado por interrupção segue pendente, com aviso e nova tentativa automática
         if ctx["interrompido"]:
             tipo, msg = ctx["interrompido"]
             restantes = [p for p in processos if p["id"] not in ctx["feitos_ids"]]
-            self._adiar(restantes, ctx, msg, limite=(tipo == "limite"))
+            self._adiar(restantes, ctx, msg, limite=(tipo in ("limite", "instavel")), proprio=(tipo == "instavel"))
             log.warning("Ciclo interrompido (%s): %s — %d processo(s) não alcançado(s)", tipo, msg, len(restantes))
         if usar_dje and self.config.dados.get("dje_ativo", True):
             self._dje(processos, ctx)
@@ -542,34 +565,53 @@ class Monitor:
         log.warning("DJEN: falha em %s: %s", p["numero"], mensagem)
 
     # ----------------------------------------------------------- um bloco
-    def _bloco(self, alias, bloco, ctx):
+    def _lote(self, alias, sub, ctx):
+        """Consulta um lote de uma vez. Devolve os processos que ainda precisam de consulta individual.
+        Falha do servidor (5xx/timeout): divide o lote ao meio uma vez; falhas seguidas => CnjInstavel (pausa, sem erro)."""
         d = self.config.dados
         try:
-            individuais = bloco
-            if len(bloco) > 1:
-                try:
-                    res = self._com_espera(
-                        f"lote {alias} x{len(bloco)}",
-                        lambda: datajud.consultar_lote([p["numero_limpo"] for p in bloco], alias,
-                                                       d["api_key"], d["base_url"]))
-                    individuais = []
-                    for p in bloco:
-                        dados = res.get(p["numero_limpo"])
-                        if dados is None:
-                            individuais.append(p)  # ausência NUNCA é aceita sem confirmação individual
-                        else:
-                            self._registrar(p, dados, ctx)
-                except datajud.LoteIncompleto as e:
-                    log.info("Lote %s não utilizável (%s); consultando um a um", alias, e)
-                except datajud.ErroAPI as e:
-                    if e.codigo == "parcial":
-                        # base do CNJ sobrecarregada: consultar um a um só aumentaria a carga (e levou a 429 em série).
-                        # Interrompe o ciclo, deixa o bloco pendente e tenta de novo mais tarde.
-                        raise LimiteExcedido("A base do CNJ está sobrecarregada (respostas parciais seguidas); "
-                                             "nova tentativa automática mais tarde.")
-                    if e.codigo != 400:
-                        raise
-                    log.info("Lote %s recusado (%s); consultando um a um", alias, e.codigo)
+            res = self._com_espera(f"lote {alias} x{len(sub)}",
+                                   lambda: datajud.consultar_lote([p["numero_limpo"] for p in sub], alias, d["api_key"], d["base_url"]))
+        except datajud.LoteIncompleto as e:
+            log.info("Lote %s não utilizável (%s); consultando um a um", alias, e)
+            return list(sub)
+        except datajud.ErroAPI as e:
+            if e.codigo == "parcial":
+                # base do CNJ sobrecarregada: consultar um a um só aumentaria a carga (e levou a 429 em série).
+                raise LimiteExcedido("A base do CNJ está sobrecarregada (respostas parciais seguidas); "
+                                     "nova tentativa automática mais tarde.")
+            if _transitorio(e):
+                ctx["lote_falhas"] += 1
+                log.warning("Lote %s x%d falhou por instabilidade do servidor (%s); falha seguida nº %d",
+                            alias, len(sub), e.codigo or "rede", ctx["lote_falhas"])
+                if ctx["lote_falhas"] >= 2:
+                    raise CnjInstavel("O servidor do CNJ está instável (erros 5xx/timeout seguidos); "
+                                      "os processos ficam pendentes e a consulta é repetida mais tarde.")
+                if len(sub) > 2:
+                    meio = len(sub) // 2
+                    log.info("Dividindo o lote de %d em %d + %d", len(sub), meio, len(sub) - meio)
+                    return self._lote(alias, sub[:meio], ctx) + self._lote(alias, sub[meio:], ctx)
+                return list(sub)
+            if e.codigo != 400:
+                raise
+            log.info("Lote %s recusado (%s); consultando um a um", alias, e.codigo)
+            return list(sub)
+        ctx["lote_falhas"] = 0
+        pend = []
+        for p in sub:
+            dados = res.get(p["numero_limpo"])
+            if dados is None:
+                pend.append(p)  # ausência NUNCA é aceita sem confirmação individual
+            else:
+                self._registrar(p, dados, ctx)
+        return pend
+
+    def _bloco(self, alias, bloco, ctx):
+        d = self.config.dados
+        cont = ctx["por_alias"].setdefault(alias, {})
+        try:
+            individuais = self._lote(alias, bloco, ctx) if len(bloco) > 1 else bloco
+            suspeitos = []
             for p in individuais:
                 if ctx["interrompido"]:
                     return
@@ -585,21 +627,38 @@ class Monitor:
                         if ctx["parciais"] >= 3:   # 3 seguidas: a base está sobrecarregada, não adianta insistir
                             raise LimiteExcedido("A base do CNJ está sobrecarregada (respostas parciais seguidas); "
                                                  "nova tentativa automática mais tarde.")
+                    elif _transitorio(e):
+                        ctx["transit"] += 1
+                        if ctx["transit"] >= 2:   # duas falhas de servidor seguidas: não é culpa do processo
+                            raise CnjInstavel("O servidor do CNJ está instável (erros 5xx/timeout seguidos); "
+                                              "os processos ficam pendentes e a consulta é repetida mais tarde.")
+                        suspeitos.append((p, str(e)))   # só vira erro do processo se as seguintes funcionarem
+                        continue
+                    cont["erro"] = cont.get("erro", 0) + 1
                     self._falha(p, str(e), ctx)
                     continue
                 ctx["parciais"] = 0
+                ctx["transit"] = 0
+                ctx["lote_falhas"] = 0
+                cont["ok"] = cont.get("ok", 0) + 1
                 self._registrar(p, dados, ctx)
+            for p, msg in suspeitos:   # falhou sozinho enquanto outros funcionaram: problema do processo (vai para o fim da fila)
+                cont["erro"] = cont.get("erro", 0) + 1
+                self._falha(p, msg, ctx)
         except LimiteExcedido as e:
             self.pausado_ate = time.time() + self.pausa_limite
-            ctx["interrompido"] = ("limite", str(e))
-            self._adiar(bloco, ctx, str(e), limite=True)
+            ctx["interrompido"] = ("instavel" if isinstance(e, CnjInstavel) else "limite", str(e))
+            cont["adiado"] = cont.get("adiado", 0) + sum(1 for p in bloco if p["id"] not in ctx["feitos_ids"])
+            self._adiar(bloco, ctx, str(e), limite=True, proprio=isinstance(e, CnjInstavel))
+            log.warning("DataJud em pausa por %d min (%s)", self.pausa_limite // 60, e)
         except datajud.ErroAPI as e:
             if e.codigo in (401, 403):
                 ctx["interrompido"] = ("fatal", str(e))
                 self._adiar(bloco, ctx, str(e))
                 return
-            for p in bloco:  # erro do lote inteiro (índice 404, timeout, 5xx...)
+            for p in bloco:  # erro do lote inteiro (índice 404 etc.)
                 if p["id"] not in ctx["feitos_ids"]:
+                    cont["erro"] = cont.get("erro", 0) + 1
                     self._falha(p, str(e), ctx)
 
     def _registrar(self, p, dados, ctx):
@@ -635,11 +694,12 @@ class Monitor:
         ctx["erros"] += 1
         log.warning("Falha em %s: %s", p["numero"], mensagem)
 
-    def _adiar(self, bloco, ctx, mensagem, limite=False):
+    def _adiar(self, bloco, ctx, mensagem, limite=False, proprio=False):
         """Mantém o bloco (e o restante do ciclo) como pendente, sem contar como erro."""
-        texto = ("Aguardando: limite de requisições da API atingido; nova tentativa automática."
-                 if limite else mensagem)
+        texto = mensagem if (proprio or not limite) else "Aguardando: limite de requisições da API atingido; nova tentativa automática."
         for p in bloco:
+            if p["id"] in ctx["feitos_ids"]:
+                continue
             atual = self.banco.obter(p["id"])
             if atual and atual["status"] == "pendente":
                 self.banco.registrar_resultado(p["id"], "pendente", texto)

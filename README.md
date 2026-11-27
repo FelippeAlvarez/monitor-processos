@@ -10,6 +10,7 @@ Programa local (Windows/Linux/macOS, Python 3.9+, apenas biblioteca padrão) que
 - **Partes, edição e janela própria (v0.7.4)**: nomes das partes e parte contrária nas abas Processos e Publicações, edição de partes/advogados/vara/comarca/tipo de ação, busca por parte e abertura em janela de aplicativo (MANUAL, seção 32).
 - **Dados do processo no Histórico e link do ato (v0.8.2)**: quadro de partes, advogados, vara etc. no topo do Histórico; botão "Abrir no tribunal" nas publicações (MANUAL, seção 37).
 - **Marcação de penhora facilitada (v0.8.3)**: seletor de um clique, marcação em lote (seleção ou números colados), sugestões pelo polo do cliente e botão Desfazer (MANUAL, seção 38).
+- **Consultas mais robustas e registro baixável (v0.8.3.1)**: falha 5xx/timeout do CNJ não vira "erro" em massa (pausa e pendência), reincidentes vão para o fim da fila, registro de 10 MB com download em .txt (MANUAL, seção 39).
 - **Número do processo como link (v0.8.1)**: em todas as abas, clicar no número abre o Histórico do processo (MANUAL, seção 36).
 - **Painel de gestão (v0.8.0)**: aba Gestão (só administrador): carga da equipe, carteira, processos parados, risco/alertas e publicações do DJEN (MANUAL, seção 35).
 - **Recesso padrão 20/12 a 19/01 (v0.7.6)**: decisão do escritório; o CPC art. 220 vai até 20/01 (MANUAL, seção 34).

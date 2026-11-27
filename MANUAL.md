@@ -458,3 +458,15 @@ Limites e cuidados (leia):
 - O polo nem sempre diz quem executa quem (reconvenção, cumprimento de sentença em ação com polos invertidos, litisconsórcio). Por isso a aceitação é sua.
 - Desfazer devolve a posição, mas não restaura o histórico de avisos já enviados por e-mail: um processo restaurado pode voltar a gerar aviso.
 - Ainda não existe: sugestão de retirada quando o processo se encerra, nem regra "este cliente é sempre exequente" (ficaram para uma próxima versão, justamente pelo risco de erro: o mesmo cliente pode ser executado em outro processo).
+
+
+39. CNJ INSTÁVEL, FILA DE ERROS E REGISTRO BAIXÁVEL (v0.8.3.1)
+
+Por que existe: em 27/11/2026 a varredura terminou com 181 de 205 processos em "erro". O log mostrou erro 504 (tempo esgotado no servidor do CNJ) em consultas em lote do TJRJ e erro 429 (limite de requisições). O programa antigo marcava como erro TODOS os processos do lote quando o lote falhava por problema do servidor.
+O que mudou:
+- Erro 5xx ou tempo esgotado em um lote: o lote é dividido ao meio e tentado de novo. Se o servidor continuar falhando (duas falhas seguidas), o programa PARA de consultar por 15 minutos e deixa os processos como "pendentes", sem marcar erro. Nenhum dado é perdido.
+- Durante a pausa, nenhum novo ciclo automático insiste no CNJ. O botão manual de consulta ignora a pausa.
+- Um processo que falha sozinho (enquanto os outros funcionam) fica com erro e é tentado de novo com intervalos crescentes (2, 5, 15, 30 e 60 minutos). Depois de 2 falhas seguidas ele vai para o FIM da fila, para não atrasar os demais.
+- Painel inicial: a linha da varredura agora diz "DataJud X ok de Y (Z com erro)" e informa se há pausa em curso e até que horas.
+Registro (log): agora guarda até 60 MB (6 arquivos de 10 MB, em vez de 3 MB) e registra, ao final de cada ciclo, um resumo por tribunal (ok, erro, adiados) e as pausas. Em Sobre > Registro: "Ver as últimas 5.000 linhas" (na tela) e "Baixar o registro completo (.txt)" (salva o arquivo no computador, com data e hora no nome; é só anexar ao chat). O registro não contém chave da API nem senha.
+Limites: o 504 vem do servidor do CNJ; o programa só deixa de piorar a situação, não a resolve. Se o CNJ ficar fora do ar por horas, os processos ficam pendentes até ele voltar. Esta correção foi testada com um servidor simulado, não com o CNJ real.

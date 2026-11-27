@@ -115,13 +115,13 @@ class Varredura(Base):
         self.assertGreater(self.mon.agendar_pendentes(), 0)  # no modo clássico, continua como antes
         esperar(self.mon)
 
-    def test_erro_nao_conta_como_pendente_do_bloco_mas_volta_por_backoff(self):
+    def test_servidor_instavel_deixa_pendente_e_volta_depois_da_pausa(self):
         ids = self.varios(2)
         ApiFalsa.estado["padrao"] = "500"
         self.mon.iniciar_bloco_se_devido(MANHA)
         esperar(self.mon)
-        self.assertEqual({p["status"] for p in self.banco.listar()}, {"erro"})
-        self.assertEqual(self.mon.candidatos_hoje(MANHA), [])  # já tentados hoje: o retorno é por backoff, não pelos blocos
+        self.assertEqual({p["status"] for p in self.banco.listar()}, {"pendente"})   # v0.8.3.1: 5xx não vira "erro" do processo
+        self.assertGreater(self.mon.pausado_ate, 0)
         self.assertIn(ids[0], self.mon.proxima)
 
     def test_resumo_previsao_de_duracao(self):

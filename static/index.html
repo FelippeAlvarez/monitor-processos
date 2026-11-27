@@ -778,6 +778,8 @@ Esta ferramenta é apenas apoio: <b>não substitui a conferência no tribunal, a
       <button class="b sec sm" data-doc="termos">Termos de uso</button>
       <button class="b sec sm" data-doc="privacidade">Política de privacidade</button>
       <button class="b sec sm" data-doc="log">Registro de diagnóstico (log)</button>
+      <button class="b sec sm" data-doc="log5000">Ver as últimas 5.000 linhas</button>
+      <a class="b sec sm" href="/api/log?baixar=1" download>Baixar o registro completo (.txt)</a>
     </div>
     <pre class="doc hide" id="doc"></pre>
   </div>
@@ -923,7 +925,7 @@ async function carregarDashboard() {
     ["warn", "Atenção", atencao, atencao ? `${p.erros} com erro · ${p.nao_constam} não constam · ${p.avisos} aviso(s) · ${p.dje_erros} erro(s) no DJEN` : "tudo em ordem", "painel", "erros"],
   ].map(([c, t, n, sub, aba, f]) => `<div class="card clic ${c ? "dest d-" + c : ""}" data-ir="${aba}" data-f="${f}"><span class="mut">${t}</span><b>${n}</b><small>${esc(sub)}</small></div>`).join("");
   const dje = !d.dje_ativo ? '<span class="warn">DJEN desligado em Configurações</span>' : `DJEN: ${v.dje_feitos_hoje ?? 0} de ${v.ativos ?? p.monitorados} consultados hoje`;
-  const vr = v.ativa ? `Varredura diária: DataJud ${v.feitos_hoje} de ${v.ativos} · ${dje}${v.restantes === 0 && v.dje_restantes === 0 ? " · concluída por hoje" : (v.na_janela ? "" : " · começa às " + v.inicio)}` : dje;
+  const vr = v.ativa ? `Varredura diária: DataJud ${v.ok_hoje} ok de ${v.ativos}${v.erros_hoje ? ` (<b>${v.erros_hoje} com erro</b>, nova tentativa automática)` : ""}${v.pausado_ate ? ` · <b>em pausa até ${new Date(v.pausado_ate * 1000).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</b> (CNJ instável ou limitando)` : ""} · ${dje}${v.restantes === 0 && v.dje_restantes === 0 ? " · concluída por hoje" : (v.na_janela ? "" : " · começa às " + v.inicio)}` : dje;
   $("#i-estado").innerHTML = `<span class="mut">Última consulta:</span> ${fmtUtc(d.ultima_consulta)} · ${vr}` + (d.rodando ? ` · <b>consultando… ${esc(d.progresso || "")}</b>` : "") +
     ` <span class="mut">· A varredura só roda com o computador ligado e o programa aberto.</span>`;
   if (d.agenda) desenharAgendaInicio(d.agenda);
@@ -2086,7 +2088,7 @@ async function carregarSobre() {
     <a href="${esc(s.wiki)}" target="_blank" rel="noopener">wiki do DataJud</a></p>`;
 }
 document.querySelectorAll("[data-doc]").forEach(b => b.onclick = async () => {
-  const r = await fetch(b.dataset.doc === "log" ? "/api/log" : "/doc/" + b.dataset.doc); const p = $("#doc");
+  const r = await fetch(b.dataset.doc === "log" ? "/api/log" : b.dataset.doc === "log5000" ? "/api/log?linhas=5000" : "/doc/" + b.dataset.doc); const p = $("#doc");
   p.textContent = await r.text(); p.classList.remove("hide");
 });
 

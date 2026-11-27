@@ -99,7 +99,7 @@ class ApiFalsa(BaseHTTPRequestHandler):
         acao = e["sequencia"].pop(0) if e["sequencia"] else e["padrao"]
         if acao == "drop":
             return
-        if acao in ("429", "429ra", "500", "400"):
+        if acao in ("429", "429ra", "500", "504", "400"):
             self.send_response(int(acao[:3]))
             if acao == "429ra":
                 self.send_header("Retry-After", "7")
@@ -457,11 +457,37 @@ class TesteLote(Base):
             datajud.consultar_lote = orig
         self.assertTrue(all(s == "ok" for s in self.status().values()))
 
-    def test_lote_com_erro_marca_todos_do_bloco(self):
-        ids = [self.add(f"001300{i}") for i in range(3)]
+    def test_falha_isolada_de_servidor_no_lote_nao_marca_erro(self):
+        """v0.8.3.1: um 5xx no lote divide o lote e tenta de novo; ninguém vira 'erro' por instabilidade do CNJ."""
+        [self.add(f"001300{i}") for i in range(3)]
         ApiFalsa.estado["sequencia"] = ["500"]
         r = self.mon.executar()
-        self.assertEqual(r["erros"], 3)
+        self.assertEqual(r["erros"], 0)
+        self.assertTrue(all(s != "erro" for s in self.status().values()))
+
+    def test_servidor_instavel_pausa_e_deixa_pendente_sem_erro(self):
+        """v0.8.3.1: 504 em tudo (como no log de 27/11/2026) => pausa de 15 min e processos pendentes, nunca 'erro' em massa."""
+        for i in range(12):
+            self.add(f"00131{i:02d}", origem=f"{i:04d}")
+        ApiFalsa.estado["padrao"] = "504"
+        r = self.mon.executar()
+        self.assertEqual(r["erros"], 0)
+        self.assertEqual(set(self.status().values()), {"pendente"})
+        self.assertGreater(self.mon.pausado_ate, time.time())
+        self.assertIn("instável", r["aviso"])
+        # com a pausa vigente, um novo ciclo automático não insiste no CNJ
+        n_pedidos = len(ApiFalsa.estado["caminhos"])
+        self.mon.executar()
+        self.assertEqual(len(ApiFalsa.estado["caminhos"]), n_pedidos)
+
+    def test_reincidentes_vao_para_o_fim_da_fila(self):
+        ids = [self.add(f"001320{i}") for i in range(3)]
+        self.mon.tentativas[ids[0]] = 2
+        ordem = []
+        orig = self.mon._bloco
+        self.mon._bloco = lambda alias, bloco, ctx: (ordem.extend(p["id"] for p in bloco), orig(alias, bloco, ctx))[1]
+        self.mon.executar()
+        self.assertEqual(ordem[-1], ids[0])
 
     def test_respeita_tamanho_do_lote(self):
         for i in range(25):

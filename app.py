@@ -614,13 +614,32 @@ def r_oab_visto(h):
     h.json({"ok": True})
 
 
+def _log_completo():
+    """Registro inteiro (arquivos rotacionados, do mais antigo ao mais novo)."""
+    partes = []
+    for i in range(5, 0, -1):
+        a = DADOS / f"monitor.log.{i}"
+        if a.exists():
+            partes.append(a.read_text(encoding="utf-8", errors="replace"))
+    a = DADOS / "monitor.log"
+    if a.exists():
+        partes.append(a.read_text(encoding="utf-8", errors="replace"))
+    return "".join(p if p.endswith("\n") or not p else p + "\n" for p in partes)
+
+
 def r_log(h):
-    """Últimas linhas do registro de diagnóstico (não contém chave da API nem senha)."""
-    arq = DADOS / "monitor.log"
-    texto = ""
-    if arq.exists():
-        texto = "\n".join(arq.read_text(encoding="utf-8", errors="replace").splitlines()[-300:])
-    h.enviar(texto.encode("utf-8"), "text/plain; charset=utf-8")
+    """Registro de diagnóstico (não contém chave da API nem senha). ?linhas=N (até 5000) ou ?baixar=1 (arquivo .txt completo)."""
+    q = parse_qs(urlparse(h.path).query)
+    texto = _log_completo()
+    if q.get("baixar", ["0"])[0] == "1":
+        nome = "monitor-log-" + dt.datetime.now().strftime("%Y%m%d-%H%M") + ".txt"
+        return h.enviar(texto.encode("utf-8"), "text/plain; charset=utf-8",
+                        cabecalhos={"Content-Disposition": f'attachment; filename="{nome}"'})
+    try:
+        n = max(50, min(5000, int(q.get("linhas", ["300"])[0])))
+    except ValueError:
+        n = 300
+    h.enviar("\n".join(texto.splitlines()[-n:]).encode("utf-8"), "text/plain; charset=utf-8")
 
 
 def r_listar(h):
@@ -1152,9 +1171,11 @@ class Handler(BaseHTTPRequestHandler):
                                   + self.sufixo_seguro())
 
     # ---- respostas
-    def enviar(self, dados, tipo, status=200):
+    def enviar(self, dados, tipo, status=200, cabecalhos=None):
         self.send_response(status)
         self.send_header("Content-Type", tipo)
+        for k, v in (cabecalhos or {}).items():
+            self.send_header(k, v)
         self.send_header("Content-Length", str(len(dados)))
         self.send_header("Cache-Control", "no-store")
         self.send_header("X-Content-Type-Options", "nosniff")
@@ -1324,8 +1345,8 @@ def iniciar():
     if motivo:
         print(motivo)
         sys.exit(1)
-    manipulador = logging.handlers.RotatingFileHandler(DADOS / "monitor.log", maxBytes=1_000_000,
-                                                       backupCount=2, encoding="utf-8")
+    manipulador = logging.handlers.RotatingFileHandler(DADOS / "monitor.log", maxBytes=10_000_000,
+                                                       backupCount=5, encoding="utf-8")
     manipulador.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
     logging.getLogger("monitor").addHandler(manipulador)
     logging.getLogger("monitor").setLevel(logging.INFO)
